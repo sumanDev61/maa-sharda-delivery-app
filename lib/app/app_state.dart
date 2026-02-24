@@ -22,7 +22,9 @@ class AppStateScope extends InheritedNotifier<AppState> {
 }
 
 class AppState extends ChangeNotifier {
-  AppState();
+  AppState() {
+    _seedData();
+  }
 
   final settings = SettingsState();
   RiderState rider = RiderState();
@@ -210,6 +212,78 @@ class AppState extends ChangeNotifier {
 
   static String _dayKey(DateTime dt) {
     return '${dt.year.toString().padLeft(4, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+  }
+
+  void _seedData() {
+    final now = DateTime.now();
+    
+    // 1. Rider Profile & Verification
+    rider.session = const RiderSession(isLoggedIn: true, phone: '+91 9876543210');
+    rider.profile = const RiderProfile(
+      name: 'Vaibhav',
+      email: 'vaibhav@example.com',
+      address: '123, Sharda Nagar, Jabalpur',
+      vehicle: VehicleDetails(type: VehicleType.bike, number: 'MP 20 MS 1234'),
+      bank: BankDetails(
+        holderName: 'Vaibhav S',
+        accountNumber: '123456789012',
+        ifsc: 'SBIN0001234',
+      ),
+      documents: DocumentsState(
+        idProof: DocumentStatus.verified,
+        drivingLicense: DocumentStatus.verified,
+        vehicleRc: DocumentStatus.pending,
+      ),
+      photoPath: 'https://i.pravatar.cc/150?u=rider',
+    );
+    rider.verification = VerificationStatus.verified;
+    rider.isOnline = true;
+    
+    // 2. Earnings & Trip History
+    final rng = Random();
+    for (int i = 0; i < 15; i++) {
+      final tripDate = now.subtract(Duration(days: rng.nextInt(7), hours: rng.nextInt(12)));
+      final earning = TripEarning(
+        orderId: 2000 + i,
+        createdAt: tripDate,
+        baseFare: 20.0,
+        distanceFare: 15.0 + rng.nextInt(30),
+        surge: rng.nextBool() ? 10.0 : 0.0,
+        tips: rng.nextBool() ? 5.0 : 0.0,
+        incentive: 4.0,
+        isCod: rng.nextBool(),
+        cashCollected: rng.nextBool() ? 150 + rng.nextInt(200) : 0,
+      );
+      earnings.addTrip(earning);
+      
+      // Also add to orders history
+      orders.history.add(OrderHistoryItem(
+        orderId: earning.orderId,
+        restaurantName: ['Maa Sharda Fast Food', 'South Spice', 'Burger Box'][rng.nextInt(3)],
+        dropArea: ['Sharda Nagar', 'Green Park', 'Civil Lines'][rng.nextInt(3)],
+        status: OrderStatus.delivered,
+        completedAt: tripDate,
+        earning: earning.total,
+        cashCollected: earning.cashCollected,
+        note: '',
+      ));
+    }
+    
+    // 3. Active Order
+    final activeReq = OrderRequest(
+      id: 3001,
+      restaurantName: 'South Spice',
+      restaurantArea: 'Central Market',
+      dropArea: 'Green Park colony',
+      pickupDistanceKm: 1.2,
+      deliveryDistanceKm: 3.5,
+      etaMin: 15,
+      expectedEarning: 55,
+      cashToCollect: 0,
+      createdAt: now.subtract(const Duration(minutes: 5)),
+      expiresAt: now.add(const Duration(minutes: 25)),
+    );
+    orders.active.add(ActiveOrder.fromRequest(activeReq));
   }
 }
 
