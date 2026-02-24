@@ -86,32 +86,58 @@ class _HomeTab extends StatelessWidget {
       slivers: [
         SliverAppBar(
           pinned: true,
+          backgroundColor: Colors.white,
+          elevation: 0,
+          leading: const Padding(
+            padding: EdgeInsets.all(8.0),
+            child: CircleAvatar(
+              backgroundImage: NetworkImage('https://i.pravatar.cc/150?u=rider'),
+            ),
+          ),
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Rider', style: textTheme.titleMedium),
-              const SizedBox(height: 2),
+              const Text(
+                'STATUS',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  color: Color(0xFF64748B),
+                  letterSpacing: 0.5,
+                ),
+              ),
               Row(
                 children: [
-                  const Icon(
-                    Icons.location_on_outlined,
-                    size: 14,
-                    color: AppColors.mutedText,
+                   Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF00E676),
+                      shape: BoxShape.circle,
+                    ),
                   ),
-                  const SizedBox(width: 4),
-                  Text('Current location', style: textTheme.bodySmall),
+                  const SizedBox(width: 6),
+                  Text(
+                    isOnline ? 'Online' : 'Offline',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
                 ],
               ),
             ],
           ),
           actions: [
-            IconButton(
-              onPressed: isOnline ? onSimulateOrder : null,
-              icon: const Icon(Icons.notifications_active_outlined),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(right: 12),
-              child: _OnlineToggle(value: isOnline, onChanged: onToggleOnline),
+            Container(
+              margin: const EdgeInsets.only(right: 16),
+              child: Switch(
+                value: isOnline,
+                onChanged: onToggleOnline,
+                activeColor: const Color(0xFF00E676),
+                activeTrackColor: const Color(0xFFEEF9F1),
+              ),
             ),
           ],
         ),
@@ -477,184 +503,318 @@ class _EarningsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     final state = AppStateScope.of(context);
-    final now = DateTime.now();
-    final weekStart = now.subtract(Duration(days: now.weekday - 1));
-    final weekTrips = state.earnings.trips
-        .where(
-          (t) => t.createdAt.isAfter(
-            DateTime(weekStart.year, weekStart.month, weekStart.day),
-          ),
-        )
-        .toList();
-    final weekTips = weekTrips.fold<double>(0, (s, t) => s + t.tips);
-    final weekIncentives = weekTrips.fold<double>(0, (s, t) => s + t.incentive);
     return Scaffold(
-      appBar: AppBar(title: const Text('Earnings')),
+      backgroundColor: const Color(0xFF0C140E), // Very dark green background
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: const Icon(Icons.arrow_back, color: Colors.white),
+        title: Column(
+          children: const [
+            Text(
+              'Earnings',
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+                fontSize: 18,
+              ),
+            ),
+            Text(
+              'Nov 13 - Nov 19 ⌄',
+              style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+            ),
+          ],
+        ),
+        centerTitle: true,
+        actions: const [
+          Icon(Icons.help_outline, color: Colors.white),
+          SizedBox(width: 16),
+        ],
+      ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
         children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('This week', style: textTheme.bodySmall),
-                  const SizedBox(height: 6),
-                  Text(
-                    '₹ ${state.earnings.weekTotal.toStringAsFixed(0)}',
-                    style: textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 10),
-                  const Divider(height: 1),
-                  const SizedBox(height: 12),
-                  _KeyValueRow(label: 'Trips', value: '${weekTrips.length}'),
-                  const SizedBox(height: 10),
-                  _KeyValueRow(
-                    label: 'Incentives',
-                    value: '₹ ${weekIncentives.toStringAsFixed(0)}',
-                  ),
-                  const SizedBox(height: 10),
-                  _KeyValueRow(
-                    label: 'Tips',
-                    value: '₹ ${weekTips.toStringAsFixed(0)}',
-                  ),
-                ],
+          const SizedBox(height: 24),
+          const Center(
+            child: Text(
+              'AVAILABLE BALANCE',
+              style: TextStyle(
+                color: Color(0xFF64748B),
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1,
               ),
             ),
           ),
-          const SizedBox(height: 14),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Balance', style: textTheme.titleMedium),
-                  const SizedBox(height: 10),
-                  _KeyValueRow(
-                    label: 'Today',
-                    value: '₹ ${state.earnings.todayTotal.toStringAsFixed(0)}',
-                  ),
-                  const SizedBox(height: 10),
-                  _KeyValueRow(
-                    label: 'This month',
-                    value: '₹ ${state.earnings.monthTotal.toStringAsFixed(0)}',
-                  ),
-                  const SizedBox(height: 10),
-                  _KeyValueRow(
-                    label: 'COD cash pending',
-                    value: '₹ ${state.earnings.codCashPending}',
-                  ),
-                ],
+          const SizedBox(height: 8),
+          const Center(
+            child: Text(
+              '\$1,240.50',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 48,
+                fontWeight: FontWeight.w900,
               ),
             ),
           ),
-          const SizedBox(height: 14),
-          Text('Trips', style: textTheme.titleMedium),
-          const SizedBox(height: 10),
-          if (state.earnings.trips.isEmpty)
-            const _EmptyState(
-              icon: Icons.payments_outlined,
-              title: 'No earnings yet',
-              subtitle: 'Complete deliveries to see earnings here.',
-            )
-          else
-            ...state.earnings.trips
-                .take(12)
-                .map(
-                  (t) => Card(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: AppColors.background,
-                        child: Icon(
-                          t.isCod
-                              ? Icons.payments_outlined
-                              : Icons.credit_card_outlined,
-                          color: AppColors.primary,
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton.icon(
+              onPressed: () {},
+              icon: const Icon(Icons.account_balance_wallet_outlined),
+              label: const Text(
+                'Cash Out Now',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00E676),
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(28),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 32),
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: const Color(0xFF162018),
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text(
+                          'Weekly Earnings',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Text(
+                          'Mon - Sun',
+                          style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                        ),
+                      ],
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF00E676).withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text(
+                        '+12%',
+                        style: TextStyle(
+                          color: Color(0xFF00E676),
+                          fontWeight: FontWeight.w900,
+                          fontSize: 12,
                         ),
                       ),
-                      title: Text('₹ ${t.total.toStringAsFixed(0)}'),
-                      subtitle: Text(
-                        'Order #${t.orderId} · ${_dateLabel(t.createdAt)}',
-                      ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () {
-                        showModalBottomSheet<void>(
-                          context: context,
-                          showDragHandle: true,
-                          builder: (context) {
-                            return SafeArea(
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(
-                                  16,
-                                  0,
-                                  16,
-                                  16,
-                                ),
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Order #${t.orderId}',
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.titleMedium,
-                                    ),
-                                    const SizedBox(height: 12),
-                                    _KeyValueRow(
-                                      label: 'Base fare',
-                                      value:
-                                          '₹ ${t.baseFare.toStringAsFixed(0)}',
-                                    ),
-                                    const SizedBox(height: 10),
-                                    _KeyValueRow(
-                                      label: 'Distance fare',
-                                      value:
-                                          '₹ ${t.distanceFare.toStringAsFixed(0)}',
-                                    ),
-                                    const SizedBox(height: 10),
-                                    _KeyValueRow(
-                                      label: 'Surge',
-                                      value: '₹ ${t.surge.toStringAsFixed(0)}',
-                                    ),
-                                    const SizedBox(height: 10),
-                                    _KeyValueRow(
-                                      label: 'Tips',
-                                      value: '₹ ${t.tips.toStringAsFixed(0)}',
-                                    ),
-                                    const SizedBox(height: 10),
-                                    _KeyValueRow(
-                                      label: 'Incentive',
-                                      value:
-                                          '₹ ${t.incentive.toStringAsFixed(0)}',
-                                    ),
-                                    const SizedBox(height: 10),
-                                    _KeyValueRow(
-                                      label: 'Total',
-                                      value: '₹ ${t.total.toStringAsFixed(0)}',
-                                    ),
-                                    if (t.isCod) ...[
-                                      const SizedBox(height: 10),
-                                      _KeyValueRow(
-                                        label: 'Cash collected',
-                                        value: '₹ ${t.cashCollected}',
-                                      ),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        );
-                      },
                     ),
-                  ),
+                  ],
                 ),
+                const SizedBox(height: 48),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'
+                  ].map((day) {
+                    final isToday = day == 'Fri';
+                    return Column(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: day == 'Wed' ? 80 : 40,
+                          decoration: BoxDecoration(
+                            color: isToday ? const Color(0xFF00E676) : const Color(0xFF2D3C2F),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          day,
+                          style: TextStyle(
+                            color: isToday ? const Color(0xFF00E676) : const Color(0xFF64748B),
+                            fontSize: 11,
+                            fontWeight: isToday ? FontWeight.w900 : FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 32),
+          const Text(
+            'Today\'s Breakdown',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _breakdownGrid(),
+          const SizedBox(height: 32),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: const [
+              Text(
+                'Recent Trips',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              Text(
+                'See All',
+                style: TextStyle(
+                  color: Color(0xFF00E676),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ..._mockTrips(),
+          const SizedBox(height: 24),
+        ],
+      ),
+    );
+  }
+
+  Widget _breakdownGrid() {
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 2,
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 1.6,
+      children: [
+        _breakdownCard('Base Pay', '\$85.00', Icons.local_shipping_outlined, const Color(0xFF3B82F6)),
+        _breakdownCard('Tips', '\$42.50', Icons.favorite_border, const Color(0xFFA855F7)),
+        _breakdownCard('Incentives', '\$15.00', Icons.local_fire_department_outlined, const Color(0xFFF97316)),
+        _breakdownCard('Total Today', '\$142.50', Icons.account_balance_wallet_outlined, const Color(0xFF00E676), isTotal: true),
+      ],
+    );
+  }
+
+  Widget _breakdownCard(String label, String value, IconData icon, Color color, {bool isTotal = false}) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF162018),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: const TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+          const Spacer(),
+          Text(
+            value,
+            style: TextStyle(
+              color: isTotal ? const Color(0xFF00E676) : Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _mockTrips() {
+    return [
+      _tripTile('Burger King', '2.4 mi • 2:30 PM', '+\$12.50', Icons.fastfood),
+      _tripTile('Pizza Hut', '5.1 mi • 1:15 PM', '+\$18.25', Icons.local_pizza),
+      _tripTile('Noodle House', '1.2 mi • 12:45 PM', '+\$9.50', Icons.ramen_dining),
+    ];
+  }
+
+  Widget _tripTile(String title, String subtitle, String price, IconData icon) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF162018),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: const BoxDecoration(
+              color: Color(0xFF0C140E),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: const Color(0xFF00E676), size: 20),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+                ),
+                Text(
+                  subtitle,
+                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                price,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF064E3B),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: const Text(
+                  'Completed',
+                  style: TextStyle(color: Color(0xFF00E676), fontSize: 9, fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
         ],
       ),
     );
@@ -1376,150 +1536,214 @@ class _OrderRequestCard extends StatelessWidget {
       builder: (context, millis, _) {
         final secs = (millis / 1000).ceil().clamp(0, 999);
         final canAct = secs > 0;
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+        return Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFF1E1E1E),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: const Color(0xFF334155), width: 1),
+          ),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withOpacity(0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.fastfood, color: Color(0xFFF59E0B)),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          order.restaurantName,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            const Icon(Icons.star, color: Color(0xFFF59E0B), size: 14),
+                            const SizedBox(width: 4),
+                            const Text(
+                              '4.5',
+                              style: TextStyle(color: Colors.white, fontSize: 13),
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              '• Indian Cuisine',
+                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '₹${order.expectedEarning}',
+                        style: const TextStyle(
+                          color: Color(0xFFEF4444),
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const Text(
+                        'Est. Earning',
+                        style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2D2D2D),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Row(
                   children: [
                     Expanded(
-                      child: Text(
-                        order.restaurantName,
-                        style: textTheme.titleMedium,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: const [
+                              Icon(Icons.location_on, color: Color(0xFF94A3B8), size: 16),
+                              SizedBox(width: 4),
+                              Text(
+                                'DISTANCE',
+                                style: TextStyle(
+                                  color: Color(0xFF94A3B8),
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${order.totalDistanceKm.toStringAsFixed(1)} km',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.background,
-                        borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: AppColors.outline),
-                      ),
-                      child: Text(
-                        '${order.totalDistanceKm.toStringAsFixed(1)} km · ${secs}s',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12,
+                      width: 1,
+                      height: 30,
+                      color: const Color(0xFF3F3F3F),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: const [
+                                Icon(Icons.access_time, color: Color(0xFF94A3B8), size: 16),
+                                SizedBox(width: 4),
+                                Text(
+                                  'TIME',
+                                  style: TextStyle(
+                                    color: Color(0xFF94A3B8),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '~${order.etaMin} min',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                _AddressRow(
-                  icon: Icons.storefront_outlined,
-                  title: 'Pickup',
-                  value: order.restaurantArea,
-                ),
-                const SizedBox(height: 10),
-                _AddressRow(
-                  icon: Icons.home_outlined,
-                  title: 'Drop',
-                  value: order.dropArea,
-                ),
-                const SizedBox(height: 12),
-                const Divider(height: 1),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _Pill(
-                        icon: Icons.payments_outlined,
-                        label: '₹ ${order.expectedEarning}',
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: canAct ? () => state.rejectOrder(order.id) : null,
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Color(0xFF3F3F3F)),
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        foregroundColor: Colors.white,
+                      ),
+                      child: const Text(
+                        'Reject',
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: _Pill(
-                        icon: Icons.timer_outlined,
-                        label: '${order.etaMin} min',
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      onPressed: canAct ? () {
+                        final ok = state.acceptOrder(order.id);
+                        if (!ok) return;
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => DeliveryFlowScreen(orderId: order.id),
+                          ),
+                        );
+                      } : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFEF4444), // Red as per image
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Text(
+                            'Accept Order',
+                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                          ),
+                          SizedBox(width: 8),
+                          Icon(Icons.arrow_forward),
+                        ],
                       ),
                     ),
-                  ],
-                ),
-                if (order.cashToCollect > 0) ...[
-                  const SizedBox(height: 10),
-                  _Pill(
-                    icon: Icons.payments_outlined,
-                    label: 'Cash to collect: ₹ ${order.cashToCollect}',
                   ),
                 ],
-                const SizedBox(height: 14),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        style: OutlinedButton.styleFrom(
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          side: const BorderSide(color: AppColors.outline),
-                          foregroundColor: AppColors.text,
-                          textStyle: const TextStyle(
-                            fontWeight: FontWeight.w700,
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        onPressed: canAct
-                            ? () => state.rejectOrder(
-                                order.id,
-                                reason: 'Rejected',
-                              )
-                            : null,
-                        child: const Text('Reject'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primary,
-                          foregroundColor: AppColors.onPrimary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          textStyle: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                          ),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        onPressed: canAct
-                            ? () {
-                                final ok = state.acceptOrder(order.id);
-                                if (!ok) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'You can handle up to 2 active orders.',
-                                      ),
-                                    ),
-                                  );
-                                  return;
-                                }
-                                final active = state.orders.active.firstWhere(
-                                  (a) => a.id == order.id,
-                                  orElse: () => state.orders.active.first,
-                                );
-                                Navigator.of(context).push(
-                                  MaterialPageRoute<void>(
-                                    builder: (_) =>
-                                        DeliveryFlowScreen(orderId: active.id),
-                                  ),
-                                );
-                              }
-                            : null,
-                        child: const Text('Accept'),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         );
       },

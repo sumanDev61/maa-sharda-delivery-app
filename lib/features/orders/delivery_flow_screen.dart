@@ -137,350 +137,293 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
   Widget build(BuildContext context) {
     final state = AppStateScope.of(context);
     final order = state.orders.findActive(widget.orderId);
-    if (order == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Delivery')),
-        body: const SafeArea(
-          child: Center(
-            child: Text(
-              'Order not found',
-              style: TextStyle(fontWeight: FontWeight.w800),
-            ),
-          ),
-        ),
-      );
-    }
-
-    final progress = order.progress;
-    final steps = _steps(progress);
+    if (order == null) return const Scaffold(body: Center(child: Text('Order not found')));
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text('Order #${order.id}'),
-        actions: [
-          IconButton(
-            onPressed: () => _showIssueSheet(context, state, order),
-            icon: const Icon(Icons.report_outlined),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            _OrderSummaryCard(order: order),
-            const SizedBox(height: 12),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
+      backgroundColor: Colors.white,
+      body: Stack(
+        children: [
+          // Simulated Map Background
+          Positioned.fill(
+            child: Container(
+              color: const Color(0xFFF1F5F9),
+              child: Center(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(
-                      'Delivery progress',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 12),
-                    ...steps.map((s) => _StepRow(step: s)),
+                    Icon(Icons.map_outlined, size: 64, color: Colors.blue.withOpacity(0.2)),
+                    const SizedBox(height: 16),
+                    const Text('Pickup Location Map', style: TextStyle(color: Color(0xFF94A3B8))),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      side: const BorderSide(color: AppColors.outline),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    onPressed: _loading
-                        ? null
-                        : () => _showContactSheet(context, 'Customer'),
-                    child: const Text('Customer'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: OutlinedButton(
-                    style: OutlinedButton.styleFrom(
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      side: const BorderSide(color: AppColors.outline),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    onPressed: _loading
-                        ? null
-                        : () => _showContactSheet(context, 'Restaurant'),
-                    child: const Text('Restaurant'),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            _actionSection(context, state, order),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _actionSection(
-    BuildContext context,
-    AppState state,
-    ActiveOrder order,
-  ) {
-    return switch (order.progress) {
-      DeliveryProgress.navigateRestaurant => PrimaryButton(
-        label: 'Reached restaurant',
-        isLoading: _loading,
-        onPressed: _loading
-            ? null
-            : () => _run(() async {
-                state.markReachedRestaurant(order.id);
-                return true;
-              }),
-      ),
-      DeliveryProgress.reachedRestaurant => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Pickup confirmation',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _pickupOtpController,
-                keyboardType: TextInputType.number,
-                onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.lock_outline),
-                  hintText: 'Enter restaurant OTP',
-                ),
-              ),
-              const SizedBox(height: 12),
-              PrimaryButton(
-                label: 'Confirm pickup',
-                isLoading: _loading,
-                onPressed:
-                    _pickupOtpController.text.trim().length == 4 && !_loading
-                    ? () => _run(
-                        () => state.confirmPickupOtp(
-                          order.id,
-                          _pickupOtpController.text,
-                        ),
-                        error: 'Wrong OTP',
-                      )
-                    : null,
-              ),
-            ],
           ),
-        ),
-      ),
-      DeliveryProgress.pickedUp => PrimaryButton(
-        label: 'Arrived at customer',
-        isLoading: _loading,
-        onPressed: _loading
-            ? null
-            : () => _run(() async {
-                state.markArrivedCustomer(order.id);
-                return true;
-              }),
-      ),
-      DeliveryProgress.navigateCustomer => PrimaryButton(
-        label: 'Arrived at customer',
-        isLoading: _loading,
-        onPressed: _loading
-            ? null
-            : () => _run(() async {
-                state.markArrivedCustomer(order.id);
-                return true;
-              }),
-      ),
-      DeliveryProgress.arrivedCustomer => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Delivery confirmation',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 12),
-              if (order.cashToCollect > 0) ...[
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 12,
+          
+          // Top Navigation Overlay
+          Positioned(
+            top: 50,
+            left: 20,
+            right: 20,
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: const BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.arrow_back, color: Color(0xFF1E293B), size: 24),
                   ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: AppColors.outline),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(30),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.1),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
                   child: Row(
-                    children: [
-                      const Icon(
-                        Icons.payments_outlined,
-                        color: AppColors.primary,
-                      ),
-                      const SizedBox(width: 10),
-                      const Expanded(
-                        child: Text(
-                          'Cash to collect',
-                          style: TextStyle(fontWeight: FontWeight.w800),
-                        ),
-                      ),
+                    children: const [
+                      Icon(Icons.near_me, color: Color(0xFF00E676), size: 18),
+                      SizedBox(width: 8),
                       Text(
-                        '₹ ${order.cashToCollect}',
-                        style: const TextStyle(fontWeight: FontWeight.w900),
+                        'Navigate',
+                        style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 12),
               ],
-              TextField(
-                controller: _deliveryOtpController,
-                keyboardType: TextInputType.number,
-                onChanged: (_) => setState(() {}),
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.lock_outline),
-                  hintText: 'Enter customer OTP',
-                ),
-              ),
-              const SizedBox(height: 12),
-              PrimaryButton(
-                label: 'Mark delivered',
-                isLoading: _loading,
-                onPressed:
-                    _deliveryOtpController.text.trim().length == 4 && !_loading
-                    ? () => _run(
-                        () => state.confirmDeliveryOtp(
-                          order.id,
-                          _deliveryOtpController.text,
-                        ),
-                        error: 'Wrong OTP',
-                      )
-                    : null,
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
-      DeliveryProgress.delivered => const SizedBox.shrink(),
-    };
-  }
 
-  List<_DeliveryStep> _steps(DeliveryProgress current) {
-    final steps = <_DeliveryStep>[
-      _DeliveryStep(
-        title: 'Navigate to restaurant',
-        subtitle: 'Follow the route and reach pickup point',
-        done: current.index >= DeliveryProgress.reachedRestaurant.index,
+          // Bottom Sheet
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              decoration: const BoxDecoration(
+                color: Color(0xFF111827), // Dark grey/black
+                borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const SizedBox(height: 12),
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(
+                                        order.request.restaurantName,
+                                        style: const TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.w900,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      const Icon(Icons.verified, color: Color(0xFF00E676), size: 18),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '#${order.id} • Pick up by 12:45 PM',
+                                    style: TextStyle(
+                                      color: Colors.white.withOpacity(0.5),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Row(
+                              children: [
+                                _RoundAction(icon: Icons.call, color: Colors.white.withOpacity(0.1), iconColor: Colors.white),
+                                const SizedBox(width: 12),
+                                _RoundAction(icon: Icons.chat_bubble, color: Colors.white.withOpacity(0.1), iconColor: Colors.white),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 24),
+                        const Text(
+                          'ITEMS TO PICK UP',
+                          style: TextStyle(
+                            color: Color(0xFF94A3B8),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _PickupItem(name: 'Chicken Dum Biryani', quantity: '1', crossed: true),
+                        _PickupItem(name: 'Butter Naan', quantity: '2'),
+                        _PickupItem(name: 'Special Mutton Curry', quantity: '1'),
+                        const SizedBox(height: 24),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFFEF3C7).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.2)),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.warning_amber_rounded, color: Color(0xFFF59E0B), size: 20),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Text(
+                                  'Verify all items before leaving. Ensure packaging is intact.',
+                                  style: TextStyle(
+                                    color: Colors.white.withOpacity(0.8),
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 60,
+                          child: ElevatedButton(
+                            onPressed: () {
+                              state.markReachedRestaurant(order.id);
+                              Navigator.of(context).pop();
+                            },
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFFEF4444),
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              elevation: 0,
+                            ),
+                            child: const Text(
+                              'Reached Restaurant',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 32),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
-      _DeliveryStep(
-        title: 'Reached restaurant',
-        subtitle: 'Confirm pickup and collect order',
-        done: current.index >= DeliveryProgress.pickedUp.index,
-      ),
-      _DeliveryStep(
-        title: 'Navigate to customer',
-        subtitle: 'Start delivery after pickup',
-        done: current.index >= DeliveryProgress.arrivedCustomer.index,
-      ),
-      _DeliveryStep(
-        title: 'Delivered',
-        subtitle: 'Confirm delivery with OTP',
-        done: current.index >= DeliveryProgress.delivered.index,
-      ),
-    ];
-    return steps;
+    );
   }
 }
 
-class _OrderSummaryCard extends StatelessWidget {
-  const _OrderSummaryCard({required this.order});
-
-  final ActiveOrder order;
+class _RoundAction extends StatelessWidget {
+  const _RoundAction({required this.icon, required this.color, required this.iconColor});
+  final IconData icon;
+  final Color color;
+  final Color iconColor;
 
   @override
   Widget build(BuildContext context) {
-    final r = order.request;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+      ),
+      child: Center(
+        child: Icon(icon, color: iconColor, size: 20),
+      ),
+    );
+  }
+}
+
+class _PickupItem extends StatefulWidget {
+  const _PickupItem({required this.name, required this.quantity, this.crossed = false});
+  final String name;
+  final String quantity;
+  final bool crossed;
+
+  @override
+  State<_PickupItem> createState() => _PickupItemState();
+}
+
+class _PickupItemState extends State<_PickupItem> {
+  late bool _checked = widget.crossed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: InkWell(
+        onTap: () => setState(() => _checked = !_checked),
+        child: Row(
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    r.restaurantName,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+            Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: _checked ? const Color(0xFF00E676) : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: _checked ? const Color(0xFF00E676) : Colors.white.withOpacity(0.2),
+                  width: 2,
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: AppColors.outline),
-                  ),
-                  child: Text(
-                    '${r.totalDistanceKm.toStringAsFixed(1)} km',
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-              ],
+              ),
+              child: _checked 
+                  ? const Icon(Icons.check, size: 16, color: Colors.black) 
+                  : null,
             ),
-            const SizedBox(height: 10),
-            _AddressRow(
-              icon: Icons.storefront_outlined,
-              title: 'Pickup',
-              value: r.restaurantArea,
-            ),
-            const SizedBox(height: 10),
-            _AddressRow(
-              icon: Icons.home_outlined,
-              title: 'Drop',
-              value: r.dropArea,
-            ),
-            const SizedBox(height: 12),
-            const Divider(height: 1),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _Pill(
-                    icon: Icons.timer_outlined,
-                    label: '${r.etaMin} min',
-                  ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Text(
+                '${widget.quantity} x ${widget.name}',
+                style: TextStyle(
+                  color: _checked ? Colors.white.withOpacity(0.3) : Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  decoration: _checked ? TextDecoration.lineThrough : null,
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _Pill(
-                    icon: Icons.payments_outlined,
-                    label: '₹ ${order.fareBreakdown.total.toStringAsFixed(0)}',
-                  ),
-                ),
-              ],
+              ),
             ),
           ],
         ),
@@ -489,141 +432,84 @@ class _OrderSummaryCard extends StatelessWidget {
   }
 }
 
-class _AddressRow extends StatelessWidget {
-  const _AddressRow({
-    required this.icon,
-    required this.title,
-    required this.value,
-  });
+class _SlideToComplete extends StatefulWidget {
+  const _SlideToComplete({required this.onComplete});
+  final VoidCallback onComplete;
 
-  final IconData icon;
-  final String title;
-  final String value;
+  @override
+  State<_SlideToComplete> createState() => _SlideToCompleteState();
+}
+
+class _SlideToCompleteState extends State<_SlideToComplete> {
+  double _position = 0;
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 34,
-          height: 34,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = constraints.maxWidth;
+        final thumbSize = 54.0;
+        final maxPosition = width - thumbSize - 6;
+
+        return Container(
+          height: 60,
           decoration: BoxDecoration(
-            color: AppColors.background,
-            borderRadius: BorderRadius.circular(10),
+            color: const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(999),
           ),
-          alignment: Alignment.center,
-          child: Icon(icon, size: 18, color: AppColors.primary),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.all(3),
+          child: Stack(
             children: [
-              Text(title, style: textTheme.bodySmall),
-              const SizedBox(height: 2),
-              Text(value, style: textTheme.bodyMedium),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _Pill extends StatelessWidget {
-  const _Pill({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(
-        color: AppColors.background,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppColors.outline),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: AppColors.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(fontWeight: FontWeight.w900),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StepRow extends StatelessWidget {
-  const _StepRow({required this.step});
-
-  final _DeliveryStep step;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 22,
-            height: 22,
-            decoration: BoxDecoration(
-              color: step.done ? AppColors.success : AppColors.outline,
-              shape: BoxShape.circle,
-            ),
-            alignment: Alignment.center,
-            child: step.done
-                ? const Icon(Icons.check, size: 14, color: Colors.white)
-                : const SizedBox.shrink(),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  step.title,
-                  style: const TextStyle(fontWeight: FontWeight.w900),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  step.subtitle,
-                  style: const TextStyle(
-                    color: AppColors.mutedText,
-                    fontSize: 12,
+              const Center(
+                child: Text(
+                  'Slide to complete delivery',
+                  style: TextStyle(
+                    color: Color(0xFF64748B),
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-              ],
-            ),
+              ),
+              Positioned(
+                left: _position,
+                child: GestureDetector(
+                  onHorizontalDragUpdate: (details) {
+                    setState(() {
+                      _position = (_position + details.delta.dx).clamp(0, maxPosition);
+                    });
+                  },
+                  onHorizontalDragEnd: (details) {
+                    if (_position >= maxPosition * 0.8) {
+                      widget.onComplete();
+                    } else {
+                      setState(() {
+                        _position = 0;
+                      });
+                    }
+                  },
+                  child: Container(
+                    width: thumbSize,
+                    height: thumbSize,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF00E676),
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black26,
+                          blurRadius: 10,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: const Icon(Icons.chevron_right, color: Colors.white, size: 28),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
-}
-
-class _DeliveryStep {
-  const _DeliveryStep({
-    required this.title,
-    required this.subtitle,
-    required this.done,
-  });
-
-  final String title;
-  final String subtitle;
-  final bool done;
 }
 
 class _SheetAction extends StatelessWidget {

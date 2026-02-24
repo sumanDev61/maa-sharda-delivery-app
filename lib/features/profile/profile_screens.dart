@@ -161,68 +161,180 @@ class DocumentsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final items = const <_DocItem>[
-      _DocItem(name: 'Driving license', status: _DocStatus.verified),
-      _DocItem(name: 'RC', status: _DocStatus.pending),
-      _DocItem(name: 'Insurance', status: _DocStatus.missing),
-      _DocItem(name: 'PAN', status: _DocStatus.verified),
-      _DocItem(name: 'Aadhaar', status: _DocStatus.pending),
+      _DocItem(name: 'Aadhar Card', status: _DocStatus.verified),
+      _DocItem(name: 'PAN Card', status: _DocStatus.verified),
+      _DocItem(name: 'Driving License', status: _DocStatus.pending),
+      _DocItem(name: 'Vehicle RC', status: _DocStatus.missing),
     ];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Documents')),
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        leading: IconButton(
+          onPressed: () => Navigator.of(context).pop(),
+          icon: const Icon(Icons.arrow_back_ios_new, color: Color(0xFF64748B)),
+        ),
+        title: const Text(
+          'Verify Identity',
+          style: TextStyle(
+            color: Color(0xFF0F172A),
+            fontWeight: FontWeight.w900,
+            fontSize: 18,
+          ),
+        ),
+        centerTitle: true,
+      ),
       body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Complete your documents to go online.',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 12),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(999),
-                      child: const LinearProgressIndicator(
-                        value: 0.6,
-                        minHeight: 8,
-                        backgroundColor: AppColors.outline,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  ],
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 24),
+              const Text(
+                'STEP 2 OF 3',
+                style: TextStyle(
+                  color: Color(0xFF00E676),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                  letterSpacing: 0.5,
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            ...items.map(
-              (d) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Card(
-                  margin: EdgeInsets.zero,
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: AppColors.background,
-                      child: Icon(d.icon, color: d.color),
+              const SizedBox(height: 8),
+              Row(
+                children: List.generate(3, (index) {
+                  final isActive = index < 2;
+                  return Expanded(
+                    child: Container(
+                      height: 4,
+                      margin: EdgeInsets.only(right: index == 2 ? 0 : 8),
+                      decoration: BoxDecoration(
+                        color: isActive ? const Color(0xFF00E676) : const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
-                    title: Text(
-                      d.name,
-                      style: const TextStyle(fontWeight: FontWeight.w800),
+                  );
+                }),
+              ),
+              const SizedBox(height: 32),
+              const Text(
+                'Upload Documents',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w900,
+                  color: Color(0xFF0F172A),
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Please upload clear photos of your original documents for verification.',
+                style: TextStyle(
+                  color: Color(0xFF64748B),
+                  fontSize: 16,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 32),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: items.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 16),
+                  itemBuilder: (context, index) {
+                    final d = items[index];
+                    return InkWell(
+                      onTap: () => _showUploadSheet(context, d.name),
+                      child: Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: const Color(0xFFF1F5F9)),
+                        ),
+                        child: Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                              ),
+                              child: Icon(d.icon, color: d.color, size: 24),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    d.name,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 16,
+                                      color: Color(0xFF0F172A),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    d.statusLabel,
+                                    style: TextStyle(
+                                      color: d.color,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const Icon(
+                              Icons.arrow_forward_ios,
+                              size: 14,
+                              color: Color(0xFF94A3B8),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 24),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 60,
+                  child: ElevatedButton(
+                    onPressed: () {},
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00E676),
+                      foregroundColor: Colors.white,
+                      elevation: 8,
+                      shadowColor: const Color(0xFF00E676).withOpacity(0.4),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
                     ),
-                    subtitle: Text(d.statusLabel),
-                    trailing: FilledButton.tonal(
-                      onPressed: () => _showUploadSheet(context, d.name),
-                      child: Text(d.ctaLabel),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Text(
+                          'Next',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Icon(Icons.arrow_forward),
+                      ],
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
