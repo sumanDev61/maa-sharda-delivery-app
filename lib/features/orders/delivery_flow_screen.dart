@@ -316,30 +316,156 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
                           ),
                         ),
                         const SizedBox(height: 32),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 60,
-                          child: ElevatedButton(
-                            onPressed: () {
-                              state.markReachedRestaurant(order.id);
-                              Navigator.of(context).pop();
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFEF4444),
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                              elevation: 0,
-                            ),
-                            child: const Text(
-                              'Reached Restaurant',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                          ),
+                        Builder(
+                          builder: (context) {
+                            switch (order.progress) {
+                              case DeliveryProgress.navigateRestaurant:
+                                return SizedBox(
+                                  width: double.infinity,
+                                  height: 60,
+                                  child: ElevatedButton(
+                                    onPressed: _loading ? null : () async {
+                                      await state.markReachedRestaurant(order.id);
+                                      if (!mounted) return;
+                                      setState(() {});
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFEF4444),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      elevation: 0,
+                                    ),
+                                    child: const Text(
+                                      'Reached Restaurant',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              case DeliveryProgress.reachedRestaurant:
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Enter Pickup OTP',
+                                      style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w700),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    TextField(
+                                      controller: _pickupOtpController,
+                                      keyboardType: TextInputType.number,
+                                      maxLength: 4,
+                                      decoration: const InputDecoration(
+                                        counterText: '',
+                                        hintText: '4-digit OTP',
+                                        filled: true,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      height: 56,
+                                      child: ElevatedButton(
+                                        onPressed: _loading ? null : () async {
+                                          await _run(() async {
+                                            final ok = await state.confirmPickupOtp(order.id, _pickupOtpController.text.trim());
+                                            if (ok) setState(() {});
+                                            return ok;
+                                          }, error: 'Invalid OTP');
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFFEF4444),
+                                          foregroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                        ),
+                                        child: const Text('Confirm Pickup'),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              case DeliveryProgress.pickedUp:
+                                return SizedBox(
+                                  width: double.infinity,
+                                  height: 60,
+                                  child: ElevatedButton(
+                                    onPressed: _loading ? null : () async {
+                                      await state.markArrivedCustomer(order.id);
+                                      if (!mounted) return;
+                                      setState(() {});
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFEF4444),
+                                      foregroundColor: Colors.white,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      elevation: 0,
+                                    ),
+                                    child: const Text(
+                                      'Arrived at Customer',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w900,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              case DeliveryProgress.arrivedCustomer:
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Enter Delivery OTP',
+                                      style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w700),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    TextField(
+                                      controller: _deliveryOtpController,
+                                      keyboardType: TextInputType.number,
+                                      maxLength: 4,
+                                      decoration: const InputDecoration(
+                                        counterText: '',
+                                        hintText: '4-digit OTP',
+                                        filled: true,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    SizedBox(
+                                      width: double.infinity,
+                                      height: 56,
+                                      child: ElevatedButton(
+                                        onPressed: _loading ? null : () async {
+                                          await _run(() async {
+                                            final ok = await state.confirmDeliveryOtp(order.id, _deliveryOtpController.text.trim());
+                                            if (ok && mounted) Navigator.of(context).pop();
+                                            return ok;
+                                          }, error: 'Invalid OTP');
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFFEF4444),
+                                          foregroundColor: Colors.white,
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                        ),
+                                        child: const Text('Confirm Delivery'),
+                                      ),
+                                    ),
+                                  ],
+                                );
+                              case DeliveryProgress.navigateCustomer:
+                              case DeliveryProgress.delivered:
+                                return SizedBox(
+                                  width: double.infinity,
+                                  child: OutlinedButton(
+                                    onPressed: () => Navigator.of(context).pop(),
+                                    child: const Text('Close'),
+                                  ),
+                                );
+                            }
+                          },
                         ),
                         const SizedBox(height: 32),
                       ],

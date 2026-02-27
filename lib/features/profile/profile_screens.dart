@@ -145,6 +145,48 @@ class _GeneralInfoScreenState extends State<GeneralInfoScreen> {
 class DocumentsScreen extends StatelessWidget {
   const DocumentsScreen({super.key});
 
+  Future<String?> _promptForUrl(BuildContext context, String title) async {
+    final controller = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(title),
+          content: TextField(
+            controller: controller,
+            decoration: const InputDecoration(hintText: 'https://...'),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.of(context).pop(controller.text.trim()), child: const Text('Submit')),
+          ],
+        );
+      },
+    );
+  }
+
+  String _docKey(String displayName) {
+    final key = displayName.toLowerCase();
+    if (key.contains('aadhar')) return 'aadhar';
+    if (key.contains('pan')) return 'pan';
+    if (key.contains('driving')) return 'license';
+    if (key.contains('vehicle')) return 'rc';
+    return 'aadhar';
+  }
+
+  DocumentType _docType(String key) {
+    switch (key) {
+      case 'aadhar':
+        return DocumentType.idProof;
+      case 'license':
+        return DocumentType.drivingLicense;
+      case 'rc':
+        return DocumentType.vehicleRc;
+      default:
+        return DocumentType.idProof;
+    }
+  }
+
   void _showUploadSheet(BuildContext context, String docName) {
     showModalBottomSheet<void>(
       context: context,
@@ -164,14 +206,43 @@ class DocumentsScreen extends StatelessWidget {
                 const SizedBox(height: 12),
                 _SheetAction(
                   icon: Icons.photo_camera_outlined,
-                  title: 'Use camera',
-                  onTap: () => Navigator.of(context).pop(),
+                  title: 'Add image URL',
+                  onTap: () async {
+                    Navigator.of(context).pop();
+                    final url = await _promptForUrl(context, 'Paste $docName image URL');
+                    if (url == null || url.trim().isEmpty) return;
+                    final docKey = _docKey(docName);
+                    await ApiClient().post('/v1/delivery/profile/documents', body: {
+                      'doc': docKey,
+                      'status': 'pending',
+                      'url': url.trim(),
+                    });
+                    final state = AppStateScope.of(context);
+                    await state.setDocumentStatus(_docType(docKey), DocumentStatus.pending);
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Document submitted')),
+                    );
+                  },
                 ),
                 const SizedBox(height: 8),
                 _SheetAction(
                   icon: Icons.photo_library_outlined,
-                  title: 'Choose from gallery',
-                  onTap: () => Navigator.of(context).pop(),
+                  title: 'Mark as verified',
+                  onTap: () async {
+                    Navigator.of(context).pop();
+                    final docKey = _docKey(docName);
+                    await ApiClient().post('/v1/delivery/profile/documents', body: {
+                      'doc': docKey,
+                      'status': 'verified',
+                    });
+                    final state = AppStateScope.of(context);
+                    await state.setDocumentStatus(_docType(docKey), DocumentStatus.verified);
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Document marked verified')),
+                    );
+                  },
                 ),
               ],
             ),

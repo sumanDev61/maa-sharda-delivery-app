@@ -255,11 +255,38 @@ class _OtpScreenState extends State<_OtpScreen> {
         
         widget.onVerified();
       } else {
+        final code = res.statusCode;
+        if (code == 401) {
+          final reg = await ApiClient().post('/v1/delivery/register', body: {
+            'name': '',
+            'phone': widget.phone,
+            'password': _controller.text.trim(),
+          });
+          if (reg.statusCode == 200) {
+            final retry = await ApiClient().post('/v1/delivery/login', body: {
+              'phone': widget.phone,
+              'password': _controller.text.trim(),
+            });
+            if (retry.statusCode == 200) {
+              final data = jsonDecode(retry.body);
+              final token = data['token'] as String;
+              final riderId = data['rider']['id'].toString();
+              final name = data['rider']['name'] as String? ?? '';
+              final phone = data['rider']['phone'] as String;
+              await ApiClient().setAuthSession(token, riderId);
+              final state = AppStateScope.of(context);
+              await state.login(phone: phone);
+              if (name.isNotEmpty) {
+                await state.updateGeneralInfo(name: name);
+              }
+              widget.onVerified();
+              return;
+            }
+          }
+        }
         setState(() => _loading = false);
-        final msg = jsonDecode(res.body)['error'] ?? 'Invalid credentials';
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(msg)),
-        );
+        final msg = jsonDecode(res.body)['error'] ?? 'Login failed';
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       }
     } catch (e) {
       if (!mounted) return;
