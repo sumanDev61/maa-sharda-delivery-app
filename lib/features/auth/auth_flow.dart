@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 
 import '../../app/app_state.dart';
 import '../../app/theme/app_theme.dart';
+import '../../core/api/api_client.dart';
 import '../../ui/primary_button.dart';
+import 'dart:convert';
 
 class AuthFlow extends StatefulWidget {
   const AuthFlow({super.key});
@@ -40,7 +42,6 @@ class _AuthFlowState extends State<AuthFlow> {
         phone: _phone,
         onVerified: () {
           final state = AppStateScope.of(context);
-          state.login(phone: _phone);
           final next = state.isOnboardingComplete ? '/home' : '/onboarding';
           Navigator.of(context).pushReplacementNamed(next);
         },
@@ -230,10 +231,43 @@ class _OtpScreenState extends State<_OtpScreen> {
   Future<void> _verify() async {
     if (_controller.text.trim().length != 4) return;
     setState(() => _loading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 500));
-    if (!mounted) return;
-    setState(() => _loading = false);
-    widget.onVerified();
+    
+    try {
+      final res = await ApiClient().post('/v1/delivery/login', body: {
+        'phone': widget.phone,
+        'password': _controller.text.trim(),
+      });
+      
+      if (!mounted) return;
+      
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final token = data['token'] as String;
+        final riderId = data['rider']['id'].toString();
+        final name = data['rider']['name'] as String;
+        final phone = data['rider']['phone'] as String;
+        
+        await ApiClient().setAuthSession(token, riderId);
+        
+        final state = AppStateScope.of(context);
+        state.login(phone: phone);
+        state.updateGeneralInfo(name: name);
+        
+        widget.onVerified();
+      } else {
+        setState(() => _loading = false);
+        final msg = jsonDecode(res.body)['error'] ?? 'Invalid credentials';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg)),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Network error: $e')),
+      );
+    }
   }
 
   @override
@@ -275,7 +309,7 @@ class _OtpScreenState extends State<_OtpScreen> {
               const SizedBox(height: 10),
               Row(
                 children: [
-                  Text('Didn’t receive?', style: textTheme.bodySmall),
+                  Text("Didn't receive?", style: textTheme.bodySmall),
                   const SizedBox(width: 6),
                   TextButton(
                     onPressed: _loading ? null : () {},
