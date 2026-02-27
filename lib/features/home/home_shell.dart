@@ -22,7 +22,7 @@ class _HomeShellState extends State<HomeShell> {
       _HomeTab(
         isOnline: state.rider.isOnline,
         onToggleOnline: (v) => state.setOnline(v),
-        onSimulateOrder: () => state.simulateIncomingOrder(),
+        onSimulateOrder: () => state.fetchAvailableOrders(),
       ),
       const _OrdersTab(),
       const _EarningsTab(),
@@ -548,10 +548,10 @@ class _EarningsTab extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          const Center(
+          Center(
             child: Text(
-              '\$1,240.50',
-              style: TextStyle(
+              '₹ ${state.earnings.todayTotal.toStringAsFixed(0)}',
+              style: const TextStyle(
                 color: Colors.white,
                 fontSize: 48,
                 fontWeight: FontWeight.w900,
@@ -695,7 +695,12 @@ class _EarningsTab extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 16),
-          ..._mockTrips(),
+          ...state.earnings.trips.take(10).map((t) => _tripTile(
+                t.orderId == 0 ? 'Order' : 'Order #${t.orderId}',
+                '${t.createdAt.hour}:${t.createdAt.minute.toString().padLeft(2, '0')}',
+                '₹ ${t.total.toStringAsFixed(0)}',
+                Icons.directions_bike,
+              )),
           const SizedBox(height: 24),
         ],
       ),
@@ -1711,8 +1716,8 @@ class _OrderRequestCard extends StatelessWidget {
                   Expanded(
                     flex: 2,
                     child: ElevatedButton(
-                      onPressed: canAct ? () {
-                        final ok = state.acceptOrder(order.id);
+                      onPressed: canAct ? () async {
+                        final ok = await state.acceptOrder(order.id);
                         if (!ok) return;
                         Navigator.of(context).push(
                           MaterialPageRoute<void>(

@@ -250,7 +250,7 @@ class _OtpScreenState extends State<_OtpScreen> {
         await ApiClient().setAuthSession(token, riderId);
         
         final state = AppStateScope.of(context);
-        state.login(phone: phone);
+        await state.login(phone: phone);
         state.updateGeneralInfo(name: name);
         
         widget.onVerified();

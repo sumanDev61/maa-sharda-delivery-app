@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../app/theme/app_theme.dart';
+import '../../app/app_state.dart';
+import '../../core/api/api_client.dart';
+import 'dart:convert';
 import '../../ui/primary_button.dart';
 
 class GeneralInfoScreen extends StatefulWidget {
@@ -11,8 +14,8 @@ class GeneralInfoScreen extends StatefulWidget {
 }
 
 class _GeneralInfoScreenState extends State<GeneralInfoScreen> {
-  final _nameController = TextEditingController(text: 'Rider Name');
-  final _phoneController = TextEditingController(text: '+91 98xxxxxx10');
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _addressController = TextEditingController();
   bool _saving = false;
@@ -28,7 +31,12 @@ class _GeneralInfoScreenState extends State<GeneralInfoScreen> {
 
   Future<void> _save() async {
     setState(() => _saving = true);
-    await Future<void>.delayed(const Duration(milliseconds: 450));
+    final state = AppStateScope.of(context);
+    await state.updateGeneralInfo(
+      name: _nameController.text.trim(),
+      email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
+      address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
+    );
     if (!mounted) return;
     setState(() => _saving = false);
     ScaffoldMessenger.of(
@@ -38,6 +46,21 @@ class _GeneralInfoScreenState extends State<GeneralInfoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final s = AppStateScope.of(context);
+      if (_nameController.text.isEmpty) {
+        _nameController.text = s.rider.profile.name;
+      }
+      if (_phoneController.text.isEmpty) {
+        _phoneController.text = s.rider.session.phone;
+      }
+      if (_emailController.text.isEmpty) {
+        _emailController.text = s.rider.profile.email;
+      }
+      if (_addressController.text.isEmpty) {
+        _addressController.text = s.rider.profile.address;
+      }
+    });
     final textTheme = Theme.of(context).textTheme;
     return Scaffold(
       appBar: AppBar(title: const Text('General info')),
@@ -357,6 +380,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final res = await ApiClient().get('/v1/delivery/settings');
+      final s = jsonDecode(res.body) as Map<String, dynamic>;
+      setState(() {
+        _orderAlerts = s['orderAlerts'] == true;
+        _sound = s['sound'] == true;
+        _vibrate = s['vibration'] == true;
+        _language = (s['language']?.toString() ?? 'en') == 'hi' ? 'Hindi' : 'English';
+      });
+    });
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
       body: SafeArea(
@@ -368,7 +401,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   SwitchListTile(
                     value: _orderAlerts,
-                    onChanged: (v) => setState(() => _orderAlerts = v),
+                    onChanged: (v) async {
+                      setState(() => _orderAlerts = v);
+                      await ApiClient().put('/v1/delivery/settings', body: {'orderAlerts': v});
+                    },
                     title: const Text('Order alerts'),
                     subtitle: const Text('Get notified for new requests'),
                     secondary: const CircleAvatar(
@@ -382,7 +418,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const Divider(height: 1),
                   SwitchListTile(
                     value: _sound,
-                    onChanged: (v) => setState(() => _sound = v),
+                    onChanged: (v) async {
+                      setState(() => _sound = v);
+                      await ApiClient().put('/v1/delivery/settings', body: {'sound': v});
+                    },
                     title: const Text('Sound'),
                     subtitle: const Text('Play sound on new requests'),
                     secondary: const CircleAvatar(
@@ -396,7 +435,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   const Divider(height: 1),
                   SwitchListTile(
                     value: _vibrate,
-                    onChanged: (v) => setState(() => _vibrate = v),
+                    onChanged: (v) async {
+                      setState(() => _vibrate = v);
+                      await ApiClient().put('/v1/delivery/settings', body: {'vibration': v});
+                    },
                     title: const Text('Vibration'),
                     subtitle: const Text('Vibrate on new requests'),
                     secondary: const CircleAvatar(

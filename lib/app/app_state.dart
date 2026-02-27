@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../core/api/api_client.dart';
 
 class AppStateScope extends InheritedNotifier<AppState> {
   const AppStateScope({
@@ -22,9 +24,7 @@ class AppStateScope extends InheritedNotifier<AppState> {
 }
 
 class AppState extends ChangeNotifier {
-  AppState() {
-    _seedData();
-  }
+  AppState();
 
   final settings = SettingsState();
   RiderState rider = RiderState();
@@ -33,9 +33,10 @@ class AppState extends ChangeNotifier {
 
   bool get isLoggedIn => rider.session.isLoggedIn;
 
-  void login({required String phone}) {
+  Future<void> login({required String phone}) async {
     rider.session = RiderSession(isLoggedIn: true, phone: phone);
     notifyListeners();
+    await _initAfterLogin();
   }
 
   void logout() {
@@ -53,46 +54,80 @@ class AppState extends ChangeNotifier {
         rider.profile.documents.mandatoryComplete;
   }
 
-  void setOnline(bool value) {
-    rider.isOnline = value;
-    notifyListeners();
+  Future<void> setOnline(bool value) async {
+    try {
+      await ApiClient().put('/v1/delivery/status', body: {'online': value});
+      rider.isOnline = value;
+      notifyListeners();
+    } catch (_) {}
   }
 
-  Future<void> simulateIncomingOrder() async {
-    final request = OrderRequest.mock();
-    orders.addRequest(request);
-    notifyListeners();
-    if (settings.orderAlertsEnabled) {
-      if (settings.soundEnabled) {
-        SystemSound.play(SystemSoundType.alert);
+  final Map<int, String> _backendOrderId = {};
+  int _idSeq = 10000;
+
+  Future<void> fetchAvailableOrders() async {
+    try {
+      final res = await ApiClient().get('/v1/delivery/orders/available');
+      final list = (await _decode(res)) as List<dynamic>;
+      orders.requests.clear();
+      for (final o in list) {
+        final backendId = o['id'].toString();
+        final rid = _idSeq++;
+        _backendOrderId[rid] = backendId;
+        final now = DateTime.now();
+        final req = OrderRequest(
+          id: rid,
+          restaurantName: o['restaurant']?.toString() ?? '',
+          restaurantArea: '',
+          dropArea: '',
+          pickupDistanceKm: 0,
+          deliveryDistanceKm: 0,
+          etaMin: 0,
+          expectedEarning: (o['amount'] is num) ? (o['amount'] as num).toInt() : 0,
+          cashToCollect: o['payment_method']?.toString().toUpperCase() == 'CASH' ? (o['amount'] as num?)?.toInt() ?? 0 : 0,
+          createdAt: now,
+          expiresAt: now.add(const Duration(minutes: 30)),
+        );
+        orders.addRequest(req);
       }
-    }
-    if (settings.vibrationEnabled) {
-      HapticFeedback.vibrate();
-    }
+      notifyListeners();
+      if (settings.orderAlertsEnabled) {
+        if (settings.soundEnabled) {
+          SystemSound.play(SystemSoundType.alert);
+        }
+      }
+      if (settings.vibrationEnabled) {
+        HapticFeedback.vibrate();
+      }
+    } catch (_) {}
   }
 
-  void rejectOrder(int requestId, {String reason = 'Rejected'}) {
+  Future<void> rejectOrder(int requestId, {String reason = 'Rejected'}) async {
     final req = orders.removeRequest(requestId);
+    final backendId = _backendOrderId[requestId];
+    if (backendId != null) {
+      try {
+        await ApiClient().post('/v1/delivery/orders/$backendId/reject');
+      } catch (_) {}
+    }
     if (req != null) {
-      orders.history.insert(
-        0,
-        OrderHistoryItem.fromRequest(
-          req,
-          status: OrderStatus.rejected,
-          note: reason,
-        ),
-      );
+      orders.history.insert(0, OrderHistoryItem.fromRequest(req, status: OrderStatus.rejected, note: reason));
     }
     notifyListeners();
   }
 
-  bool acceptOrder(int requestId) {
+  Future<bool> acceptOrder(int requestId) async {
     final req = orders.removeRequest(requestId);
     if (req == null) return false;
     if (orders.active.length >= 2) {
       orders.requests.insert(0, req);
       return false;
+    }
+    final backendId = _backendOrderId[requestId];
+    if (backendId != null) {
+      try {
+        await ApiClient().post('/v1/delivery/orders/$backendId/accept');
+      } catch (_) {}
     }
     final active = ActiveOrder.fromRequest(req);
     orders.active.insert(0, active);
@@ -100,55 +135,67 @@ class AppState extends ChangeNotifier {
     return true;
   }
 
-  void markReachedRestaurant(int orderId) {
+  Future<void> markReachedRestaurant(int orderId) async {
     final order = orders.findActive(orderId);
     if (order == null) return;
+    final backendId = _backendOrderId[orderId];
+    if (backendId != null) {
+      try {
+        await ApiClient().put('/v1/delivery/orders/$backendId/status', body: {'status': 'REACHED_RESTAURANT'});
+      } catch (_) {}
+    }
     order.progress = DeliveryProgress.reachedRestaurant;
     notifyListeners();
   }
 
-  bool confirmPickupOtp(int orderId, String otp) {
+  Future<bool> confirmPickupOtp(int orderId, String otp) async {
     final order = orders.findActive(orderId);
     if (order == null) return false;
     if (otp.trim() != order.pickupOtp) return false;
+    final backendId = _backendOrderId[orderId];
+    if (backendId != null) {
+      try {
+        await ApiClient().put('/v1/delivery/orders/$backendId/status', body: {'status': 'PICKED_UP'});
+      } catch (_) {}
+    }
     order.progress = DeliveryProgress.pickedUp;
     notifyListeners();
     return true;
   }
 
-  void markArrivedCustomer(int orderId) {
+  Future<void> markArrivedCustomer(int orderId) async {
     final order = orders.findActive(orderId);
     if (order == null) return;
+    final backendId = _backendOrderId[orderId];
+    if (backendId != null) {
+      try {
+        await ApiClient().put('/v1/delivery/orders/$backendId/status', body: {'status': 'ARRIVED_CUSTOMER'});
+      } catch (_) {}
+    }
     order.progress = DeliveryProgress.arrivedCustomer;
     notifyListeners();
   }
 
-  bool confirmDeliveryOtp(int orderId, String otp) {
+  Future<bool> confirmDeliveryOtp(int orderId, String otp) async {
     final order = orders.findActive(orderId);
     if (order == null) return false;
     if (otp.trim() != order.deliveryOtp) return false;
+    final backendId = _backendOrderId[orderId];
+    if (backendId != null) {
+      try {
+        await ApiClient().put('/v1/delivery/orders/$backendId/status', body: {'status': 'DELIVERED'});
+      } catch (_) {}
+    }
     order.progress = DeliveryProgress.delivered;
-    completeOrder(orderId);
+    await completeOrder(orderId);
     return true;
   }
 
-  void completeOrder(int orderId) {
+  Future<void> completeOrder(int orderId) async {
     final order = orders.removeActive(orderId);
     if (order == null) return;
     orders.history.insert(0, OrderHistoryItem.fromActive(order));
-    earnings.addTrip(
-      TripEarning(
-        orderId: order.id,
-        createdAt: DateTime.now(),
-        baseFare: order.fareBreakdown.baseFare,
-        distanceFare: order.fareBreakdown.distanceFare,
-        surge: order.fareBreakdown.surge,
-        tips: order.fareBreakdown.tips,
-        incentive: order.fareBreakdown.incentive,
-        isCod: order.cashToCollect > 0,
-        cashCollected: order.cashToCollect,
-      ),
-    );
+    await _loadTrips();
     rider.metrics = rider.metrics.copyWith(
       completedTrips: rider.metrics.completedTrips + 1,
       rating: min(5, rider.metrics.rating + 0.01),
@@ -156,11 +203,18 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateGeneralInfo({
+  Future<void> updateGeneralInfo({
     required String name,
     String? email,
     String? address,
-  }) {
+  }) async {
+    try {
+      await ApiClient().put('/v1/delivery/profile', body: {
+        'name': name,
+        if (email != null) 'email': email,
+        if (address != null) 'address': address,
+      });
+    } catch (_) {}
     rider.profile = rider.profile.copyWith(
       name: name,
       email: email ?? rider.profile.email,
@@ -169,25 +223,42 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateVehicle({required VehicleType type, String? number}) {
+  Future<void> updateVehicle({required VehicleType type, String? number}) async {
+    try {
+      await ApiClient().put('/v1/delivery/profile/vehicle', body: {
+        'type': switch (type) { VehicleType.bike => 'bike', VehicleType.scooter => 'scooter', VehicleType.cycle => 'cycle', _ => 'unknown' },
+        if (number != null) 'number': number,
+      });
+    } catch (_) {}
     rider.profile = rider.profile.copyWith(
       vehicle: rider.profile.vehicle.copyWith(type: type, number: number),
     );
     notifyListeners();
   }
 
-  void updateBank({
+  Future<void> updateBank({
     required String holder,
     required String account,
     required String ifsc,
-  }) {
+  }) async {
+    try {
+      await ApiClient().put('/v1/delivery/profile/bank', body: {
+        'account_name': holder,
+        'account_number': account,
+        'ifsc': ifsc,
+      });
+    } catch (_) {}
     rider.profile = rider.profile.copyWith(
       bank: BankDetails(holderName: holder, accountNumber: account, ifsc: ifsc),
     );
     notifyListeners();
   }
 
-  void setDocumentStatus(DocumentType type, DocumentStatus status) {
+  Future<void> setDocumentStatus(DocumentType type, DocumentStatus status) async {
+    final doc = switch (type) { DocumentType.idProof => 'aadhar', DocumentType.drivingLicense => 'license', DocumentType.vehicleRc => 'rc' };
+    try {
+      await ApiClient().post('/v1/delivery/profile/documents', body: {'doc': doc, 'status': switch (status) { DocumentStatus.verified => 'verified', DocumentStatus.pending => 'pending', DocumentStatus.rejected => 'rejected', _ => 'missing' }});
+    } catch (_) {}
     final docs = rider.profile.documents.copyWithStatus(type, status);
     rider.profile = rider.profile.copyWith(documents: docs);
     notifyListeners();
@@ -214,76 +285,115 @@ class AppState extends ChangeNotifier {
     return '${dt.year.toString().padLeft(4, '0')}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
   }
 
-  void _seedData() {
-    final now = DateTime.now();
-    
-    // 1. Rider Profile & Verification
-    rider.session = const RiderSession(isLoggedIn: true, phone: '+91 9876543210');
-    rider.profile = const RiderProfile(
-      name: 'Vaibhav',
-      email: 'vaibhav@example.com',
-      address: '123, Sharda Nagar, Jabalpur',
-      vehicle: VehicleDetails(type: VehicleType.bike, number: 'MP 20 MS 1234'),
-      bank: BankDetails(
-        holderName: 'Vaibhav S',
-        accountNumber: '123456789012',
-        ifsc: 'SBIN0001234',
-      ),
-      documents: DocumentsState(
-        idProof: DocumentStatus.verified,
-        drivingLicense: DocumentStatus.verified,
-        vehicleRc: DocumentStatus.pending,
-      ),
-      photoPath: 'https://i.pravatar.cc/150?u=rider',
-    );
-    rider.verification = VerificationStatus.verified;
-    rider.isOnline = true;
-    
-    // 2. Earnings & Trip History
-    final rng = Random();
-    for (int i = 0; i < 15; i++) {
-      final tripDate = now.subtract(Duration(days: rng.nextInt(7), hours: rng.nextInt(12)));
-      final earning = TripEarning(
-        orderId: 2000 + i,
-        createdAt: tripDate,
-        baseFare: 20.0,
-        distanceFare: 15.0 + rng.nextInt(30),
-        surge: rng.nextBool() ? 10.0 : 0.0,
-        tips: rng.nextBool() ? 5.0 : 0.0,
-        incentive: 4.0,
-        isCod: rng.nextBool(),
-        cashCollected: rng.nextBool() ? 150 + rng.nextInt(200) : 0,
+  Future<void> _initAfterLogin() async {
+    await Future.wait([
+      _loadProfile(),
+      _loadSettings(),
+      _loadTrips(),
+      _loadMyOrders(),
+      fetchAvailableOrders(),
+    ]);
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final res = await ApiClient().get('/v1/delivery/profile');
+      final data = await _decode(res) as Map<String, dynamic>;
+      final g = data['general'] as Map<String, dynamic>;
+      final v = data['vehicle'] as Map<String, dynamic>;
+      final b = data['bank'] as Map<String, dynamic>;
+      final d = data['documents'] as Map<String, dynamic>;
+      final vt = switch ((v['type'] ?? 'unknown').toString()) { 'bike' => VehicleType.bike, 'scooter' => VehicleType.scooter, 'cycle' => VehicleType.cycle, _ => VehicleType.unknown };
+      rider.profile = RiderProfile(
+        name: g['name']?.toString() ?? '',
+        email: g['email']?.toString() ?? '',
+        address: g['address']?.toString() ?? '',
+        vehicle: VehicleDetails(type: vt, number: v['number']?.toString() ?? ''),
+        bank: BankDetails(holderName: b['account_name']?.toString() ?? '', accountNumber: b['account_number']?.toString() ?? '', ifsc: b['ifsc']?.toString() ?? ''),
+        documents: DocumentsState(
+          idProof: _docStatus(d['aadhar']?.toString()),
+          drivingLicense: _docStatus(d['license']?.toString()),
+          vehicleRc: _docStatus(d['rc']?.toString()),
+        ),
+        photoPath: rider.profile.photoPath,
       );
-      earnings.addTrip(earning);
-      
-      // Also add to orders history
-      orders.history.add(OrderHistoryItem(
-        orderId: earning.orderId,
-        restaurantName: ['Maa Sharda Fast Food', 'South Spice', 'Burger Box'][rng.nextInt(3)],
-        dropArea: ['Sharda Nagar', 'Green Park', 'Civil Lines'][rng.nextInt(3)],
-        status: OrderStatus.delivered,
-        completedAt: tripDate,
-        earning: earning.total,
-        cashCollected: earning.cashCollected,
-        note: '',
-      ));
-    }
-    
-    // 3. Active Order
-    final activeReq = OrderRequest(
-      id: 3001,
-      restaurantName: 'South Spice',
-      restaurantArea: 'Central Market',
-      dropArea: 'Green Park colony',
-      pickupDistanceKm: 1.2,
-      deliveryDistanceKm: 3.5,
-      etaMin: 15,
-      expectedEarning: 55,
-      cashToCollect: 0,
-      createdAt: now.subtract(const Duration(minutes: 5)),
-      expiresAt: now.add(const Duration(minutes: 25)),
-    );
-    orders.active.add(ActiveOrder.fromRequest(activeReq));
+      rider.verification = VerificationStatus.verified;
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> _loadSettings() async {
+    try {
+      final res = await ApiClient().get('/v1/delivery/settings');
+      final s = await _decode(res) as Map<String, dynamic>;
+      settings.orderAlertsEnabled = s['orderAlerts'] == true;
+      settings.soundEnabled = s['sound'] == true;
+      settings.vibrationEnabled = s['vibration'] == true;
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> _loadTrips() async {
+    try {
+      final res = await ApiClient().get('/v1/delivery/trips');
+      final list = (await _decode(res)) as List<dynamic>;
+      earnings.trips.clear();
+      for (final t in list) {
+        final amount = (t['amount'] as num?)?.toDouble() ?? 0.0;
+        final cash = (t['cash_collected'] as num?)?.toInt() ?? 0;
+        final created = DateTime.tryParse(t['created_at']?.toString() ?? '') ?? DateTime.now();
+        earnings.addTrip(TripEarning(
+          orderId: 0,
+          createdAt: created,
+          baseFare: amount,
+          distanceFare: 0,
+          surge: 0,
+          tips: 0,
+          incentive: 0,
+          isCod: cash > 0,
+          cashCollected: cash,
+        ));
+      }
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<void> _loadMyOrders() async {
+    try {
+      final res = await ApiClient().get('/v1/delivery/orders/my-orders');
+      final list = (await _decode(res)) as List<dynamic>;
+      orders.history.clear();
+      for (final o in list) {
+        final rid = _idSeq++;
+        _backendOrderId[rid] = o['id'].toString();
+        final status = (o['status']?.toString() ?? '').toUpperCase() == 'DELIVERED' ? OrderStatus.delivered : OrderStatus.accepted;
+        orders.history.add(OrderHistoryItem(
+          orderId: rid,
+          restaurantName: o['restaurant']?.toString() ?? '',
+          dropArea: '',
+          status: status,
+          completedAt: DateTime.tryParse(o['created_at']?.toString() ?? '') ?? DateTime.now(),
+          earning: (o['amount'] as num?)?.toDouble() ?? 0.0,
+          cashCollected: o['payment_method']?.toString().toUpperCase() == 'CASH' ? (o['amount'] as num?)?.toInt() ?? 0 : 0,
+          note: '',
+        ));
+      }
+      notifyListeners();
+    } catch (_) {}
+  }
+
+  Future<dynamic> _decode(dynamic res) async {
+    return jsonDecode(res.body);
+  }
+
+  DocumentStatus _docStatus(String? v) {
+    final s = (v ?? '').toLowerCase();
+    return switch (s) {
+      'verified' => DocumentStatus.verified,
+      'pending' => DocumentStatus.pending,
+      'rejected' => DocumentStatus.rejected,
+      _ => DocumentStatus.missing,
+    };
   }
 }
 
