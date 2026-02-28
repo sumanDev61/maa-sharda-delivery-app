@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -30,6 +32,7 @@ class AppState extends ChangeNotifier {
   RiderState rider = RiderState();
   OrdersState orders = OrdersState();
   EarningsState earnings = EarningsState();
+  StreamSubscription<String>? _sseSub;
 
   bool get isLoggedIn => rider.session.isLoggedIn;
 
@@ -37,13 +40,40 @@ class AppState extends ChangeNotifier {
     rider.session = RiderSession(isLoggedIn: true, phone: phone);
     notifyListeners();
     await _initAfterLogin();
+    _startRealtime();
   }
 
   void logout() {
     rider = RiderState();
     orders = OrdersState();
     earnings = EarningsState();
+    _sseSub?.cancel();
     notifyListeners();
+  }
+  Future<void> _startRealtime() async {
+    try {
+      await ApiClient().init();
+      final riderId = await _readRiderId();
+      if (riderId == null) return;
+      final uri = Uri.parse('${ApiClient.baseUrl}/v1/sse/delivery?rider_id=$riderId');
+      final client = http.Client();
+      final req = http.Request('GET', uri);
+      req.headers['Accept'] = 'text/event-stream';
+      final res = await client.send(req);
+      _sseSub = res.stream.transform(utf8.decoder).listen((chunk) async {
+        if (chunk.contains('data:')) {
+          await fetchAvailableOrders();
+        }
+      });
+    } catch (_) {}
+  }
+  Future<String?> _readRiderId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString('rider_id');
+    } catch (_) {
+      return null;
+    }
   }
 
   bool get isOnboardingComplete {
@@ -141,7 +171,7 @@ class AppState extends ChangeNotifier {
     final backendId = _backendOrderId[orderId];
     if (backendId != null) {
       try {
-        await ApiClient().put('/v1/delivery/orders/$backendId/status', body: {'status': 'REACHED_RESTAURANT'});
+        await ApiClient().put('/v1/delivery/orders/$backendId/status', body: {'status': 'DRIVER_ARRIVED_AT_MERCHANT'});
       } catch (_) {}
     }
     order.progress = DeliveryProgress.reachedRestaurant;
@@ -169,7 +199,7 @@ class AppState extends ChangeNotifier {
     final backendId = _backendOrderId[orderId];
     if (backendId != null) {
       try {
-        await ApiClient().put('/v1/delivery/orders/$backendId/status', body: {'status': 'ARRIVED_CUSTOMER'});
+        await ApiClient().put('/v1/delivery/orders/$backendId/status', body: {'status': 'ARRIVED_AT_CUSTOMER'});
       } catch (_) {}
     }
     order.progress = DeliveryProgress.arrivedCustomer;
