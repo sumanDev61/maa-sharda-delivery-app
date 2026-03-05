@@ -105,6 +105,9 @@ class AppState extends ChangeNotifier {
         final rid = _idSeq++;
         _backendOrderId[rid] = backendId;
         final now = DateTime.now();
+        final status = (o['status']?.toString() ?? '').toUpperCase();
+        final cash = o['payment_method']?.toString().toUpperCase() == 'CASH' ? (o['amount'] as num?)?.toInt() ?? 0 : 0;
+        final amount = (o['amount'] as num?)?.toInt() ?? 0;
         final req = OrderRequest(
           id: rid,
           restaurantName: o['restaurant']?.toString() ?? '',
@@ -112,11 +115,13 @@ class AppState extends ChangeNotifier {
           dropArea: '',
           pickupDistanceKm: 0,
           deliveryDistanceKm: 0,
-          etaMin: 0,
-          expectedEarning: (o['amount'] is num) ? (o['amount'] as num).toInt() : 0,
-          cashToCollect: o['payment_method']?.toString().toUpperCase() == 'CASH' ? (o['amount'] as num?)?.toInt() ?? 0 : 0,
+          etaMin: (o['prep_time_minutes'] as num?)?.toInt() ?? 15,
+          expectedEarning: amount,
+          cashToCollect: cash,
           createdAt: now,
           expiresAt: now.add(const Duration(minutes: 30)),
+          pickupOtp: (o['pickup_otp'] as String?) ?? '',
+          deliveryOtp: (o['delivery_otp'] as String?) ?? '',
         );
         orders.addRequest(req);
       }
@@ -705,6 +710,8 @@ class OrderRequest {
     required this.cashToCollect,
     required this.createdAt,
     required this.expiresAt,
+    this.pickupOtp = '',
+    this.deliveryOtp = '',
   });
 
   final int id;
@@ -718,6 +725,8 @@ class OrderRequest {
   final int cashToCollect;
   final DateTime createdAt;
   final DateTime expiresAt;
+  final String pickupOtp;
+  final String deliveryOtp;
 
   double get totalDistanceKm => pickupDistanceKm + deliveryDistanceKm;
 
@@ -825,15 +834,12 @@ class ActiveOrder {
   int get cashToCollect => request.cashToCollect;
 
   static ActiveOrder fromRequest(OrderRequest req) {
-    final rng = Random();
-    final pickupOtp = (1000 + rng.nextInt(9000)).toString();
-    final deliveryOtp = (1000 + rng.nextInt(9000)).toString();
     return ActiveOrder(
       id: req.id,
       request: req,
       progress: DeliveryProgress.navigateRestaurant,
-      pickupOtp: pickupOtp,
-      deliveryOtp: deliveryOtp,
+      pickupOtp: req.pickupOtp,
+      deliveryOtp: req.deliveryOtp,
       fareBreakdown: FareBreakdown.fromRequest(req),
     );
   }

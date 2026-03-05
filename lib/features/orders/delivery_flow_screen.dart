@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/app_state.dart';
 import '../../app/theme/app_theme.dart';
@@ -36,6 +37,18 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text(error)));
+    }
+  }
+
+  Future<void> _openMaps(ActiveOrder order) async {
+    final dest = Uri.encodeComponent(
+      order.progress == DeliveryProgress.navigateRestaurant || order.progress == DeliveryProgress.reachedRestaurant
+          ? order.request.restaurantName
+          : order.request.dropArea,
+    );
+    final uri = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$dest');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 
@@ -179,30 +192,33 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
                   ),
                 ),
                 const Spacer(),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(30),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                GestureDetector(
+                  onTap: () => _openMaps(order),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: const [
+                        Icon(Icons.near_me, color: Color(0xFF00E676), size: 18),
+                        SizedBox(width: 8),
+                        Text(
+                          'Navigate',
+                          style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
+                        ),
+                      ],
+                    ),
                   ),
-                  child: Row(
-                    children: const [
-                      Icon(Icons.near_me, color: Color(0xFF00E676), size: 18),
-                      SizedBox(width: 8),
-                      Text(
-                        'Navigate',
-                        style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
-                      ),
-                    ],
-                  ),
-                ),
+                )
               ],
             ),
           ),
