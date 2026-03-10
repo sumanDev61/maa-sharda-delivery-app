@@ -4,7 +4,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/app_state.dart';
 import '../../app/theme/app_theme.dart';
-import '../../ui/primary_button.dart';
 
 class DeliveryFlowScreen extends StatefulWidget {
   const DeliveryFlowScreen({super.key, required this.orderId});
@@ -260,12 +259,15 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
                                 children: [
                                   Row(
                                     children: [
-                                      Text(
-                                        order.request.restaurantName,
-                                        style: const TextStyle(
-                                          fontSize: 22,
-                                          fontWeight: FontWeight.w900,
-                                          color: Colors.white,
+                                      Flexible(
+                                        child: Text(
+                                          order.request.restaurantName,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.w900,
+                                            color: Colors.white,
+                                          ),
                                         ),
                                       ),
                                       const SizedBox(width: 8),
@@ -304,9 +306,15 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
                           ),
                         ),
                         const SizedBox(height: 16),
-                        _PickupItem(name: 'Chicken Dum Biryani', quantity: '1', crossed: true),
-                        _PickupItem(name: 'Butter Naan', quantity: '2'),
-                        _PickupItem(name: 'Special Mutton Curry', quantity: '1'),
+                        if (order.request.items.isEmpty)
+                          const _PickupItem(name: 'Items will appear here', quantity: '—')
+                        else
+                          ...order.request.items.map(
+                            (it) => _PickupItem(
+                              name: it.name,
+                              quantity: '${it.quantity}',
+                            ),
+                          ),
                         const SizedBox(height: 24),
                         Container(
                           padding: const EdgeInsets.all(16),
@@ -565,6 +573,8 @@ class _PickupItemState extends State<_PickupItem> {
                   fontWeight: FontWeight.w600,
                   decoration: _checked ? TextDecoration.lineThrough : null,
                 ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

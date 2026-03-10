@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -33,12 +34,17 @@ class AppState extends ChangeNotifier {
   OrdersState orders = OrdersState();
   EarningsState earnings = EarningsState();
   StreamSubscription<String>? _sseSub;
+  Timer? _autoRefreshTimer;
 
   bool get isLoggedIn => rider.session.isLoggedIn;
 
   Future<void> login({required String phone}) async {
     rider.session = RiderSession(isLoggedIn: true, phone: phone);
     notifyListeners();
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('rider_phone', phone);
+    } catch (_) {}
     await _initAfterLogin();
     _startRealtime();
   }
@@ -48,6 +54,11 @@ class AppState extends ChangeNotifier {
     orders = OrdersState();
     earnings = EarningsState();
     _sseSub?.cancel();
+    _autoRefreshTimer?.cancel();
+    ApiClient().clearSession();
+    SharedPreferences.getInstance().then((prefs) {
+      prefs.remove('rider_phone');
+    });
     notifyListeners();
   }
   Future<void> _startRealtime() async {
@@ -79,6 +90,7 @@ class AppState extends ChangeNotifier {
   bool get isOnboardingComplete {
     final profile = rider.profile;
     return profile.name.trim().isNotEmpty &&
+        profile.city.trim().isNotEmpty &&
         profile.vehicle.type != VehicleType.unknown &&
         profile.bank.isComplete &&
         rider.profile.documents.mandatoryComplete;
@@ -105,23 +117,26 @@ class AppState extends ChangeNotifier {
         final rid = _idSeq++;
         _backendOrderId[rid] = backendId;
         final now = DateTime.now();
-        final status = (o['status']?.toString() ?? '').toUpperCase();
         final cash = o['payment_method']?.toString().toUpperCase() == 'CASH' ? (o['amount'] as num?)?.toInt() ?? 0 : 0;
         final amount = (o['amount'] as num?)?.toInt() ?? 0;
+        final items = _parseItems(o['items']);
+        final estEarn = _estimateEarning(amount, items.length);
         final req = OrderRequest(
           id: rid,
           restaurantName: o['restaurant']?.toString() ?? '',
           restaurantArea: '',
-          dropArea: '',
+          dropArea: _addressLabel(o['delivery_address']),
           pickupDistanceKm: 0,
           deliveryDistanceKm: 0,
           etaMin: (o['prep_time_minutes'] as num?)?.toInt() ?? 15,
-          expectedEarning: amount,
+          expectedEarning: estEarn,
           cashToCollect: cash,
           createdAt: now,
           expiresAt: now.add(const Duration(minutes: 30)),
           pickupOtp: (o['pickup_otp'] as String?) ?? '',
           deliveryOtp: (o['delivery_otp'] as String?) ?? '',
+          orderAmount: amount,
+          items: items,
         );
         orders.addRequest(req);
       }
@@ -242,31 +257,40 @@ class AppState extends ChangeNotifier {
     required String name,
     String? email,
     String? address,
+    String? city,
   }) async {
     try {
       await ApiClient().put('/v1/delivery/profile', body: {
         'name': name,
         if (email != null) 'email': email,
         if (address != null) 'address': address,
+        if (city != null) 'city': city,
       });
     } catch (_) {}
     rider.profile = rider.profile.copyWith(
       name: name,
       email: email ?? rider.profile.email,
       address: address ?? rider.profile.address,
+      city: city ?? rider.profile.city,
     );
     notifyListeners();
   }
 
-  Future<void> updateVehicle({required VehicleType type, String? number}) async {
+  Future<void> updateVehicle({
+    required VehicleType type,
+    String? number,
+    String? drivingLicenseNumber,
+  }) async {
     try {
       await ApiClient().put('/v1/delivery/profile/vehicle', body: {
         'type': switch (type) { VehicleType.bike => 'bike', VehicleType.scooter => 'scooter', VehicleType.cycle => 'cycle', _ => 'unknown' },
         if (number != null) 'number': number,
+        if (drivingLicenseNumber != null) 'driving_license_number': drivingLicenseNumber,
       });
     } catch (_) {}
     rider.profile = rider.profile.copyWith(
       vehicle: rider.profile.vehicle.copyWith(type: type, number: number),
+      drivingLicenseNumber: drivingLicenseNumber ?? rider.profile.drivingLicenseNumber,
     );
     notifyListeners();
   }
@@ -299,6 +323,19 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> uploadDocument({
+    required DocumentType type,
+    required File file,
+  }) async {
+    final doc = switch (type) { DocumentType.idProof => 'aadhar', DocumentType.drivingLicense => 'license', DocumentType.vehicleRc => 'rc' };
+    try {
+      await ApiClient().uploadRiderDocument(doc: doc, file: file);
+      final docs = rider.profile.documents.copyWithStatus(type, DocumentStatus.pending);
+      rider.profile = rider.profile.copyWith(documents: docs);
+      notifyListeners();
+    } catch (_) {}
+  }
+
   void setBackgroundVerification(VerificationStatus status) {
     rider.verification = status;
     notifyListeners();
@@ -328,6 +365,41 @@ class AppState extends ChangeNotifier {
       _loadMyOrders(),
       fetchAvailableOrders(),
     ]);
+    _autoRefreshTimer?.cancel();
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
+      if (!rider.isOnline) return;
+      await Future.wait([
+        fetchAvailableOrders(),
+        _loadMyOrders(),
+        _loadTrips(),
+      ]);
+    });
+  }
+
+  Future<void> restoreSession() async {
+    try {
+      await ApiClient().init();
+      final prefs = await SharedPreferences.getInstance();
+      final riderId = prefs.getString('rider_id');
+      final phone = prefs.getString('rider_phone') ?? '';
+      if (riderId != null && riderId.isNotEmpty) {
+        rider.session = RiderSession(isLoggedIn: true, phone: phone);
+        notifyListeners();
+        await _initAfterLogin();
+        _startRealtime();
+      }
+    } catch (_) {}
+  }
+
+  Future<void> refreshOrders() async {
+    await Future.wait([
+      fetchAvailableOrders(),
+      _loadMyOrders(),
+    ]);
+  }
+
+  Future<void> refreshEarnings() async {
+    await _loadTrips();
   }
 
   Future<void> _loadProfile() async {
@@ -339,10 +411,12 @@ class AppState extends ChangeNotifier {
       final b = data['bank'] as Map<String, dynamic>;
       final d = data['documents'] as Map<String, dynamic>;
       final vt = switch ((v['type'] ?? 'unknown').toString()) { 'bike' => VehicleType.bike, 'scooter' => VehicleType.scooter, 'cycle' => VehicleType.cycle, _ => VehicleType.unknown };
+      final approval = (data['approval_status'] ?? '').toString();
       rider.profile = RiderProfile(
         name: g['name']?.toString() ?? '',
         email: g['email']?.toString() ?? '',
         address: g['address']?.toString() ?? '',
+        city: g['city']?.toString() ?? '',
         vehicle: VehicleDetails(type: vt, number: v['number']?.toString() ?? ''),
         bank: BankDetails(holderName: b['account_name']?.toString() ?? '', accountNumber: b['account_number']?.toString() ?? '', ifsc: b['ifsc']?.toString() ?? ''),
         documents: DocumentsState(
@@ -350,9 +424,10 @@ class AppState extends ChangeNotifier {
           drivingLicense: _docStatus(d['license']?.toString()),
           vehicleRc: _docStatus(d['rc']?.toString()),
         ),
+        drivingLicenseNumber: v['driving_license_number']?.toString() ?? '',
         photoPath: rider.profile.photoPath,
       );
-      rider.verification = VerificationStatus.verified;
+      rider.verification = _mapApprovalStatus(approval);
       notifyListeners();
     } catch (_) {}
   }
@@ -429,6 +504,48 @@ class AppState extends ChangeNotifier {
       'rejected' => DocumentStatus.rejected,
       _ => DocumentStatus.missing,
     };
+  }
+
+  static VerificationStatus _mapApprovalStatus(String raw) {
+    final s = raw.toLowerCase().trim();
+    return switch (s) {
+      'approved' => VerificationStatus.verified,
+      'inreview' => VerificationStatus.inReview,
+      'rejected' => VerificationStatus.rejected,
+      'suspended' => VerificationStatus.pending,
+      _ => VerificationStatus.pending,
+    };
+  }
+
+  List<OrderItem> _parseItems(dynamic raw) {
+    if (raw is! List) return const [];
+    return raw.map((e) {
+      final m = e is Map ? e.cast<String, dynamic>() : <String, dynamic>{};
+      final name = m['name']?.toString() ?? m['title']?.toString() ?? 'Item';
+      final qty = (m['quantity'] as num?)?.toInt() ?? (m['qty'] as num?)?.toInt() ?? 1;
+      return OrderItem(name: name, quantity: qty);
+    }).toList();
+  }
+
+  int _estimateEarning(int orderAmount, int itemCount) {
+    if (orderAmount <= 0) return 30;
+    final base = (orderAmount * 0.18).round();
+    final bonus = (itemCount * 2);
+    return (base + bonus).clamp(30, 250);
+  }
+
+  String _addressLabel(dynamic raw) {
+    if (raw == null) return '';
+    if (raw is String) return raw;
+    if (raw is Map) {
+      final m = raw.cast<String, dynamic>();
+      final line1 = m['address_line1']?.toString() ?? '';
+      final line2 = m['address_line2']?.toString() ?? '';
+      final city = m['city']?.toString() ?? '';
+      final parts = [line1, line2, city].where((e) => e.trim().isNotEmpty).toList();
+      return parts.isEmpty ? '' : parts.join(', ');
+    }
+    return '';
   }
 }
 
@@ -544,9 +661,11 @@ class RiderProfile {
     required this.name,
     required this.email,
     required this.address,
+    required this.city,
     required this.vehicle,
     required this.bank,
     required this.documents,
+    required this.drivingLicenseNumber,
     required this.photoPath,
   });
 
@@ -554,35 +673,43 @@ class RiderProfile {
     : name = '',
       email = '',
       address = '',
+      city = '',
       vehicle = const VehicleDetails(type: VehicleType.unknown, number: ''),
       bank = const BankDetails(holderName: '', accountNumber: '', ifsc: ''),
       documents = const DocumentsState.empty(),
+      drivingLicenseNumber = '',
       photoPath = '';
 
   final String name;
   final String email;
   final String address;
+  final String city;
   final VehicleDetails vehicle;
   final BankDetails bank;
   final DocumentsState documents;
+  final String drivingLicenseNumber;
   final String photoPath;
 
   RiderProfile copyWith({
     String? name,
     String? email,
     String? address,
+    String? city,
     VehicleDetails? vehicle,
     BankDetails? bank,
     DocumentsState? documents,
+    String? drivingLicenseNumber,
     String? photoPath,
   }) {
     return RiderProfile(
       name: name ?? this.name,
       email: email ?? this.email,
       address: address ?? this.address,
+      city: city ?? this.city,
       vehicle: vehicle ?? this.vehicle,
       bank: bank ?? this.bank,
       documents: documents ?? this.documents,
+      drivingLicenseNumber: drivingLicenseNumber ?? this.drivingLicenseNumber,
       photoPath: photoPath ?? this.photoPath,
     );
   }
@@ -712,6 +839,8 @@ class OrderRequest {
     required this.expiresAt,
     this.pickupOtp = '',
     this.deliveryOtp = '',
+    this.orderAmount = 0,
+    this.items = const [],
   });
 
   final int id;
@@ -727,6 +856,8 @@ class OrderRequest {
   final DateTime expiresAt;
   final String pickupOtp;
   final String deliveryOtp;
+  final int orderAmount;
+  final List<OrderItem> items;
 
   double get totalDistanceKm => pickupDistanceKm + deliveryDistanceKm;
 
@@ -768,8 +899,19 @@ class OrderRequest {
       cashToCollect: cod,
       createdAt: now,
       expiresAt: now.add(const Duration(seconds: 30)),
+      orderAmount: 320,
+      items: const [
+        OrderItem(name: 'Paneer Wrap', quantity: 1),
+        OrderItem(name: 'Lassi', quantity: 2),
+      ],
     );
   }
+}
+
+class OrderItem {
+  const OrderItem({required this.name, required this.quantity});
+  final String name;
+  final int quantity;
 }
 
 enum DeliveryProgress {

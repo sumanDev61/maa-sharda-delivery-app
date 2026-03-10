@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -49,6 +50,20 @@ class ApiClient {
     return headers;
   }
 
+  Map<String, String> _getUploadHeaders() {
+    // Do not set Content-Type here; MultipartRequest will set it with boundary.
+    final headers = <String, String>{
+      'Accept': 'application/json',
+    };
+    if (_riderId != null) {
+      headers['x-rider-id'] = _riderId!;
+    }
+    if (_riderToken != null) {
+      headers['Authorization'] = 'Bearer $_riderToken';
+    }
+    return headers;
+  }
+
   Future<http.Response> get(String endpoint) async {
     final uri = Uri.parse('$baseUrl$endpoint');
     return http.get(uri, headers: _getHeaders());
@@ -75,5 +90,23 @@ class ApiClient {
   Future<http.Response> delete(String endpoint) async {
     final uri = Uri.parse('$baseUrl$endpoint');
     return http.delete(uri, headers: _getHeaders());
+  }
+
+  Future<Map<String, dynamic>> uploadRiderDocument({
+    required String doc,
+    required File file,
+  }) async {
+    final uri = Uri.parse('$baseUrl/v1/delivery/profile/documents/upload');
+    final req = http.MultipartRequest('POST', uri);
+    req.headers.addAll(_getUploadHeaders());
+    req.fields['doc'] = doc;
+    req.files.add(await http.MultipartFile.fromPath('image', file.path));
+    final streamed = await req.send();
+    final body = await streamed.stream.bytesToString();
+    final json = body.isNotEmpty ? (jsonDecode(body) as Map<String, dynamic>) : <String, dynamic>{};
+    if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
+      throw Exception(json['error']?.toString() ?? 'upload failed');
+    }
+    return json;
   }
 }

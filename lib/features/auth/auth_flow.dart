@@ -1,12 +1,18 @@
 import 'dart:async';
+import 'package:flutter/services.dart';
 
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../app/app_state.dart';
 import '../../app/theme/app_theme.dart';
 import '../../core/api/api_client.dart';
 import '../../ui/primary_button.dart';
 import 'dart:convert';
+
+const MethodChannel _deviceUtilsChannel = MethodChannel(
+  'maa_sharda/device_utils',
+);
 
 class AuthFlow extends StatefulWidget {
   const AuthFlow({super.key});
@@ -18,6 +24,8 @@ class AuthFlow extends StatefulWidget {
 class _AuthFlowState extends State<AuthFlow> {
   AuthStep _step = AuthStep.splash;
   String _phone = '';
+  String _riderId = '';
+  String? _otp;
 
   @override
   void initState() {
@@ -33,16 +41,24 @@ class _AuthFlowState extends State<AuthFlow> {
     return switch (_step) {
       AuthStep.splash => const _SplashScreen(),
       AuthStep.login => _LoginScreen(
-        onContinue: (phone) => setState(() {
+        onContinue: (phone, riderId, otp) => setState(() {
           _phone = phone;
+          _riderId = riderId;
+          _otp = otp;
           _step = AuthStep.otp;
         }),
       ),
       AuthStep.otp => _OtpScreen(
         phone: _phone,
+        riderId: _riderId,
+        otp: _otp,
         onVerified: () {
           final state = AppStateScope.of(context);
-          final next = state.isOnboardingComplete ? '/home' : '/onboarding';
+          final next = !state.isOnboardingComplete
+              ? '/onboarding'
+              : (state.rider.verification == VerificationStatus.verified
+                  ? '/home'
+                  : '/under-review');
           Navigator.of(context).pushReplacementNamed(next);
         },
         onBack: () => setState(() => _step = AuthStep.login),
@@ -103,7 +119,7 @@ class _SplashScreen extends StatelessWidget {
 class _LoginScreen extends StatefulWidget {
   const _LoginScreen({required this.onContinue});
 
-  final ValueChanged<String> onContinue;
+  final void Function(String phone, String riderId, String? otp) onContinue;
 
   @override
   State<_LoginScreen> createState() => _LoginScreenState();
@@ -113,6 +129,14 @@ class _LoginScreenState extends State<_LoginScreen> {
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
   bool _loading = false;
+  List<String> _simNumbers = const [];
+  bool _isDetectingSim = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSimNumbers();
+  }
 
   @override
   void dispose() {
@@ -121,14 +145,174 @@ class _LoginScreenState extends State<_LoginScreen> {
     super.dispose();
   }
 
+  String _digitsOnly(String input) => input.replaceAll(RegExp(r'[^0-9]'), '');
+
+  String _lastTenDigits(String input) {
+    final digits = _digitsOnly(input);
+    if (digits.length <= 10) return digits;
+    return digits.substring(digits.length - 10);
+  }
+
+  bool _isEnteredNumberFromDeviceSim(String enteredPhone) {
+    if (_simNumbers.isEmpty) return true;
+    final entered = _lastTenDigits(enteredPhone);
+    if (entered.length < 10) return false;
+    return _simNumbers.any((sim) => _lastTenDigits(sim) == entered);
+  }
+
+  Future<void> _loadSimNumbers() async {
+    setState(() => _isDetectingSim = true);
+    try {
+      final phonePermission = await Permission.phone.request();
+      if (!phonePermission.isGranted) return;
+      final result = await _deviceUtilsChannel.invokeMethod<List<dynamic>>(
+        'getSimNumbers',
+      );
+      final values = (result ?? const <dynamic>[])
+          .map((e) => e?.toString().trim() ?? '')
+          .where((e) => e.isNotEmpty)
+          .toSet()
+          .toList();
+      if (!mounted) return;
+      setState(() => _simNumbers = values);
+      if (_simNumbers.length == 1 && _controller.text.trim().isEmpty) {
+        _controller.text = _lastTenDigits(_simNumbers.first);
+        _controller.selection = TextSelection.fromPosition(
+          TextPosition(offset: _controller.text.length),
+        );
+      }
+    } catch (_) {
+      // Best-effort SIM detection only.
+    } finally {
+      if (mounted) setState(() => _isDetectingSim = false);
+    }
+  }
+
+  Future<void> _suggestSimNumber() async {
+    if (_simNumbers.isEmpty) {
+      await _loadSimNumbers();
+    }
+    if (!mounted || _simNumbers.isEmpty) return;
+    if (_simNumbers.length == 1) {
+      _controller.text = _lastTenDigits(_simNumbers.first);
+      _controller.selection = TextSelection.fromPosition(
+        TextPosition(offset: _controller.text.length),
+      );
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text(
+                'Choose SIM Number',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            ..._simNumbers.asMap().entries.map((entry) {
+              final i = entry.key;
+              final number = entry.value;
+              return ListTile(
+                leading: CircleAvatar(
+                  radius: 14,
+                  backgroundColor: const Color(0xFFEFF6FF),
+                  child: Text(
+                    '${i + 1}',
+                    style: const TextStyle(
+                      color: Color(0xFF2563EB),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                title: Text(number),
+                onTap: () {
+                  _controller.text = _lastTenDigits(number);
+                  _controller.selection = TextSelection.fromPosition(
+                    TextPosition(offset: _controller.text.length),
+                  );
+                  Navigator.pop(sheetContext);
+                },
+              );
+            }),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     final raw = _controller.text.trim();
-    if (raw.length < 10) return;
+    final digits = _digitsOnly(raw);
+    if (digits.length != 10) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a 10-digit mobile number')),
+      );
+      return;
+    }
+    if (!_isEnteredNumberFromDeviceSim(digits)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'This mobile number is not available in this phone. Please enter your active SIM number.',
+          ),
+        ),
+      );
+      return;
+    }
     setState(() => _loading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 450));
-    if (!mounted) return;
-    setState(() => _loading = false);
-    widget.onContinue(raw);
+    try {
+      final res = await ApiClient().post('/v1/delivery/login', body: {
+        'phone': digits,
+      });
+      if (!mounted) return;
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final d = (data['data'] as Map?)?.cast<String, dynamic>() ?? {};
+        final riderId = d['rider_id']?.toString() ?? '';
+        final otp = d['otp']?.toString();
+        if (riderId.isEmpty) {
+          throw Exception('Invalid response');
+        }
+        setState(() => _loading = false);
+        widget.onContinue(digits, riderId, otp);
+        return;
+      }
+
+      if (res.statusCode == 404) {
+        final reg = await ApiClient().post('/v1/delivery/register', body: {
+          'phone': digits,
+        });
+        if (!mounted) return;
+        if (reg.statusCode == 200) {
+          final data = jsonDecode(reg.body) as Map<String, dynamic>;
+          final d = (data['data'] as Map?)?.cast<String, dynamic>() ?? {};
+          final riderId = d['rider_id']?.toString() ?? '';
+          final otp = d['otp']?.toString();
+          if (riderId.isEmpty) throw Exception('Invalid response');
+          setState(() => _loading = false);
+          widget.onContinue(digits, riderId, otp);
+          return;
+        }
+      }
+
+      setState(() => _loading = false);
+      final msg = (jsonDecode(res.body) as Map?)?['error']?.toString() ??
+          'Login failed';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Network error: $e')),
+      );
+    }
   }
 
   @override
@@ -169,12 +353,28 @@ class _LoginScreenState extends State<_LoginScreen> {
                 controller: _controller,
                 focusNode: _focusNode,
                 keyboardType: TextInputType.phone,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                  LengthLimitingTextInputFormatter(10),
+                ],
                 textInputAction: TextInputAction.done,
                 onChanged: (_) => setState(() {}),
                 onSubmitted: (_) => _submit(),
-                decoration: const InputDecoration(
+                onTap: _suggestSimNumber,
+                decoration: InputDecoration(
                   prefixIcon: Icon(Icons.phone_android),
-                  hintText: 'Phone number',
+                  hintText: _isDetectingSim
+                      ? 'Detecting SIM numbers...'
+                      : (_simNumbers.isNotEmpty
+                          ? 'Tap to pick SIM number'
+                          : 'Phone number'),
+                  suffixIcon: _simNumbers.isNotEmpty
+                      ? IconButton(
+                          onPressed: _suggestSimNumber,
+                          icon: const Icon(Icons.sim_card, size: 20),
+                          tooltip: 'Choose SIM number',
+                        )
+                      : null,
                 ),
               ),
               const SizedBox(height: 12),
@@ -206,11 +406,15 @@ class _LoginScreenState extends State<_LoginScreen> {
 class _OtpScreen extends StatefulWidget {
   const _OtpScreen({
     required this.phone,
+    required this.riderId,
+    required this.otp,
     required this.onVerified,
     required this.onBack,
   });
 
   final String phone;
+  final String riderId;
+  final String? otp;
   final VoidCallback onVerified;
   final VoidCallback onBack;
 
@@ -221,6 +425,7 @@ class _OtpScreen extends StatefulWidget {
 class _OtpScreenState extends State<_OtpScreen> {
   final _controller = TextEditingController();
   bool _loading = false;
+  String? _shownOtp;
 
   @override
   void dispose() {
@@ -228,14 +433,29 @@ class _OtpScreenState extends State<_OtpScreen> {
     super.dispose();
   }
 
+  @override
+  void initState() {
+    super.initState();
+    final otp = widget.otp?.trim();
+    if (otp != null && otp.isNotEmpty) {
+      _shownOtp = otp;
+      if (otp.length == 6) {
+        _controller.text = otp;
+        _controller.selection = TextSelection.fromPosition(
+          TextPosition(offset: otp.length),
+        );
+      }
+    }
+  }
+
   Future<void> _verify() async {
-    if (_controller.text.trim().length != 4) return;
+    if (_controller.text.trim().length != 6) return;
     setState(() => _loading = true);
     
     try {
-      final res = await ApiClient().post('/v1/delivery/login', body: {
-        'phone': widget.phone,
-        'password': _controller.text.trim(),
+      final res = await ApiClient().post('/v1/delivery/verify-otp', body: {
+        'rider_id': widget.riderId,
+        'otp': _controller.text.trim(),
       });
       
       if (!mounted) return;
@@ -244,48 +464,28 @@ class _OtpScreenState extends State<_OtpScreen> {
         final data = jsonDecode(res.body);
         final token = data['token'] as String;
         final riderId = data['rider']['id'].toString();
-        final name = data['rider']['name'] as String;
-        final phone = data['rider']['phone'] as String;
+        final name = (data['rider']['name'] as String?) ?? '';
+        final phone = (data['rider']['phone'] as String?) ?? widget.phone;
+        final approval =
+            (data['rider']['approval_status'] as String?) ?? 'inReview';
         
         await ApiClient().setAuthSession(token, riderId);
         
         final state = AppStateScope.of(context);
         await state.login(phone: phone);
-        state.updateGeneralInfo(name: name);
+        if (name.isNotEmpty) {
+          await state.updateGeneralInfo(name: name);
+        }
+        state.setBackgroundVerification(
+          approval.toLowerCase() == 'approved'
+              ? VerificationStatus.verified
+              : VerificationStatus.inReview,
+        );
         
         widget.onVerified();
       } else {
-        final code = res.statusCode;
-        if (code == 401) {
-          final reg = await ApiClient().post('/v1/delivery/register', body: {
-            'name': '',
-            'phone': widget.phone,
-            'password': _controller.text.trim(),
-          });
-          if (reg.statusCode == 200) {
-            final retry = await ApiClient().post('/v1/delivery/login', body: {
-              'phone': widget.phone,
-              'password': _controller.text.trim(),
-            });
-            if (retry.statusCode == 200) {
-              final data = jsonDecode(retry.body);
-              final token = data['token'] as String;
-              final riderId = data['rider']['id'].toString();
-              final name = data['rider']['name'] as String? ?? '';
-              final phone = data['rider']['phone'] as String;
-              await ApiClient().setAuthSession(token, riderId);
-              final state = AppStateScope.of(context);
-              await state.login(phone: phone);
-              if (name.isNotEmpty) {
-                await state.updateGeneralInfo(name: name);
-              }
-              widget.onVerified();
-              return;
-            }
-          }
-        }
         setState(() => _loading = false);
-        final msg = jsonDecode(res.body)['error'] ?? 'Login failed';
+        final msg = jsonDecode(res.body)['error'] ?? 'Verification failed';
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
       }
     } catch (e) {
@@ -319,18 +519,53 @@ class _OtpScreenState extends State<_OtpScreen> {
               Text('Enter OTP', style: textTheme.titleLarge),
               const SizedBox(height: 6),
               Text('Sent to +91 ${widget.phone}', style: textTheme.bodySmall),
+              if ((_shownOtp ?? '').trim().isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEEF2FF),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFC7D2FE)),
+                  ),
+                  child: RichText(
+                    text: TextSpan(
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Color(0xFF1E293B),
+                        height: 1.3,
+                        fontWeight: FontWeight.w600,
+                      ),
+                      children: [
+                        const TextSpan(text: 'Here is your OTP: '),
+                        TextSpan(
+                          text: _shownOtp!,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 18),
               TextField(
                 controller: _controller,
                 keyboardType: TextInputType.number,
                 textInputAction: TextInputAction.done,
-                maxLength: 4,
+                maxLength: 6,
                 onChanged: (_) => setState(() {}),
                 onSubmitted: (_) => _verify(),
                 decoration: const InputDecoration(
                   counterText: '',
                   prefixIcon: Icon(Icons.lock_outline),
-                  hintText: '4-digit OTP',
+                  hintText: '6-digit OTP',
                 ),
               ),
               const SizedBox(height: 10),
@@ -339,7 +574,27 @@ class _OtpScreenState extends State<_OtpScreen> {
                   Text("Didn't receive?", style: textTheme.bodySmall),
                   const SizedBox(width: 6),
                   TextButton(
-                    onPressed: _loading ? null : () {},
+                    onPressed: _loading
+                        ? null
+                        : () async {
+                            setState(() => _loading = true);
+                            try {
+                              final res = await ApiClient().post(
+                                '/v1/delivery/login',
+                                body: {'phone': widget.phone},
+                              );
+                              if (!mounted) return;
+                              if (res.statusCode == 200) {
+                                final data = jsonDecode(res.body)
+                                    as Map<String, dynamic>;
+                                final d = (data['data'] as Map?)
+                                        ?.cast<String, dynamic>() ??
+                                    {};
+                                setState(() => _shownOtp = d['otp']?.toString());
+                              }
+                            } catch (_) {}
+                            if (mounted) setState(() => _loading = false);
+                          },
                     child: const Text('Resend'),
                   ),
                 ],
@@ -350,7 +605,7 @@ class _OtpScreenState extends State<_OtpScreen> {
                 child: PrimaryButton(
                   label: 'Verify & continue',
                   isLoading: _loading,
-                  onPressed: _controller.text.trim().length == 4
+                  onPressed: _controller.text.trim().length == 6
                       ? _verify
                       : null,
                 ),

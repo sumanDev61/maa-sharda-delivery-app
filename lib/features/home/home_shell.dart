@@ -16,6 +16,15 @@ class _HomeShellState extends State<HomeShell> {
   int _index = 0;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AppStateScope.of(context).refreshEarnings();
+      AppStateScope.of(context).refreshOrders();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final state = AppStateScope.of(context);
     final pages = <Widget>[
@@ -130,6 +139,11 @@ class _HomeTab extends StatelessWidget {
             ],
           ),
           actions: [
+            IconButton(
+              onPressed: onSimulateOrder,
+              icon: const Icon(Icons.refresh),
+              tooltip: 'Refresh',
+            ),
             Container(
               margin: const EdgeInsets.only(right: 16),
               child: Switch(
@@ -376,7 +390,15 @@ class _OrdersTab extends StatelessWidget {
     final active = state.orders.active;
     final history = state.orders.history;
     return Scaffold(
-      appBar: AppBar(title: const Text('Orders')),
+      appBar: AppBar(
+        title: const Text('Orders'),
+        actions: [
+          IconButton(
+            onPressed: () => state.refreshOrders(),
+            icon: const Icon(Icons.refresh),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -498,8 +520,21 @@ class _OrdersTab extends StatelessWidget {
   }
 }
 
-class _EarningsTab extends StatelessWidget {
+class _EarningsTab extends StatefulWidget {
   const _EarningsTab();
+
+  @override
+  State<_EarningsTab> createState() => _EarningsTabState();
+}
+
+class _EarningsTabState extends State<_EarningsTab> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      AppStateScope.of(context).refreshEarnings();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -509,7 +544,6 @@ class _EarningsTab extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: const Icon(Icons.arrow_back, color: Colors.white),
         title: Column(
           children: const [
             Text(
@@ -527,9 +561,14 @@ class _EarningsTab extends StatelessWidget {
           ],
         ),
         centerTitle: true,
-        actions: const [
-          Icon(Icons.help_outline, color: Colors.white),
-          SizedBox(width: 16),
+        actions: [
+          IconButton(
+            onPressed: () => state.refreshEarnings(),
+            icon: const Icon(Icons.refresh, color: Colors.white),
+          ),
+          const SizedBox(width: 8),
+          const Icon(Icons.help_outline, color: Colors.white),
+          const SizedBox(width: 16),
         ],
       ),
       body: ListView(
@@ -617,9 +656,9 @@ class _EarningsTab extends StatelessWidget {
                         color: const Color(0xFF00E676).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Text(
-                        '+12%',
-                        style: TextStyle(
+                      child: Text(
+                        '₹ ${state.earnings.weekTotal.toStringAsFixed(0)}',
+                        style: const TextStyle(
                           color: Color(0xFF00E676),
                           fontWeight: FontWeight.w900,
                           fontSize: 12,
@@ -684,7 +723,20 @@ class _EarningsTab extends StatelessWidget {
                   fontWeight: FontWeight.w900,
                 ),
               ),
-              Text(
+            ],
+          ),
+          const SizedBox(height: 4),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const _TripsListScreen(),
+                  ),
+                );
+              },
+              child: const Text(
                 'See All',
                 style: TextStyle(
                   color: Color(0xFF00E676),
@@ -692,7 +744,7 @@ class _EarningsTab extends StatelessWidget {
                   fontWeight: FontWeight.w800,
                 ),
               ),
-            ],
+            ),
           ),
           const SizedBox(height: 16),
           ...state.earnings.trips.take(10).map((t) => _tripTile(
@@ -716,10 +768,10 @@ class _EarningsTab extends StatelessWidget {
       crossAxisSpacing: 12,
       childAspectRatio: 1.6,
       children: [
-        _breakdownCard('Base Pay', '\$85.00', Icons.local_shipping_outlined, const Color(0xFF3B82F6)),
-        _breakdownCard('Tips', '\$42.50', Icons.favorite_border, const Color(0xFFA855F7)),
-        _breakdownCard('Incentives', '\$15.00', Icons.local_fire_department_outlined, const Color(0xFFF97316)),
-        _breakdownCard('Total Today', '\$142.50', Icons.account_balance_wallet_outlined, const Color(0xFF00E676), isTotal: true),
+        _breakdownCard('Base Pay', '₹85.00', Icons.local_shipping_outlined, const Color(0xFF3B82F6)),
+        _breakdownCard('Tips', '₹42.50', Icons.favorite_border, const Color(0xFFA855F7)),
+        _breakdownCard('Incentives', '₹15.00', Icons.local_fire_department_outlined, const Color(0xFFF97316)),
+        _breakdownCard('Total Today', '₹142.50', Icons.account_balance_wallet_outlined, const Color(0xFF00E676), isTotal: true),
       ],
     );
   }
@@ -760,9 +812,9 @@ class _EarningsTab extends StatelessWidget {
 
   List<Widget> _mockTrips() {
     return [
-      _tripTile('Burger King', '2.4 mi • 2:30 PM', '+\$12.50', Icons.fastfood),
-      _tripTile('Pizza Hut', '5.1 mi • 1:15 PM', '+\$18.25', Icons.local_pizza),
-      _tripTile('Noodle House', '1.2 mi • 12:45 PM', '+\$9.50', Icons.ramen_dining),
+      _tripTile('Burger King', '2.4 mi • 2:30 PM', '₹12.50', Icons.fastfood),
+      _tripTile('Pizza Hut', '5.1 mi • 1:15 PM', '₹18.25', Icons.local_pizza),
+      _tripTile('Noodle House', '1.2 mi • 12:45 PM', '₹9.50', Icons.ramen_dining),
     ];
   }
 
@@ -829,6 +881,100 @@ class _EarningsTab extends StatelessWidget {
     final d = dt.day.toString().padLeft(2, '0');
     final m = dt.month.toString().padLeft(2, '0');
     return '$d/$m';
+  }
+}
+
+class _TripsListScreen extends StatelessWidget {
+  const _TripsListScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppStateScope.of(context);
+    return Scaffold(
+      appBar: AppBar(title: const Text('All Trips')),
+      body: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: state.earnings.trips.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemBuilder: (context, i) {
+          final t = state.earnings.trips[i];
+          return _TripTile(
+            title: t.orderId == 0 ? 'Order' : 'Order #${t.orderId}',
+            subtitle:
+                '${t.createdAt.hour}:${t.createdAt.minute.toString().padLeft(2, '0')}',
+            price: '₹ ${t.total.toStringAsFixed(0)}',
+            icon: Icons.directions_bike,
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _TripTile extends StatelessWidget {
+  const _TripTile({
+    required this.title,
+    required this.subtitle,
+    required this.price,
+    required this.icon,
+  });
+
+  final String title;
+  final String subtitle;
+  final String price;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF162018),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: const BoxDecoration(
+              color: Color(0xFF0C140E),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: const Color(0xFF00E676), size: 20),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            price,
+            style: const TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 16,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -905,12 +1051,6 @@ class _ProfileTab extends StatelessWidget {
                 children: [
                   const _ProfileSummaryCard(),
                   const SizedBox(height: 14),
-                  _ProfileQuickActions(
-                    onOpenDocuments: () =>
-                        _push(context, const DocumentsScreen()),
-                    onOpenEarnings: () => onNavigateToTab(2),
-                  ),
-                  const SizedBox(height: 18),
                   Text(
                     'Account',
                     style: Theme.of(context).textTheme.titleMedium,
@@ -933,7 +1073,7 @@ class _ProfileTab extends StatelessWidget {
                           subtitle: 'Bike, RC, insurance',
                           onTap: () => _push(
                             context,
-                            const PlaceholderScreen(title: 'Vehicle details'),
+                            const VehicleDetailsScreen(),
                           ),
                         ),
                         const Divider(height: 1),
@@ -943,7 +1083,7 @@ class _ProfileTab extends StatelessWidget {
                           subtitle: 'Payout account',
                           onTap: () => _push(
                             context,
-                            const PlaceholderScreen(title: 'Bank details'),
+                            const BankDetailsScreen(),
                           ),
                         ),
                         const Divider(height: 1),
@@ -1574,6 +1714,7 @@ class _OrderRequestCard extends StatelessWidget {
                             fontSize: 18,
                             fontWeight: FontWeight.w900,
                           ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                         Row(
                           children: [
@@ -1584,9 +1725,9 @@ class _OrderRequestCard extends StatelessWidget {
                               style: TextStyle(color: Colors.white, fontSize: 13),
                             ),
                             const SizedBox(width: 8),
-                            const Text(
-                              '• Indian Cuisine',
-                              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                            Text(
+                              '• ${order.items.length} items',
+                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
                             ),
                           ],
                         ),
@@ -1608,6 +1749,13 @@ class _OrderRequestCard extends StatelessWidget {
                         'Est. Earning',
                         style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
                       ),
+                      if (order.cashToCollect > 0) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          'COD ₹${order.cashToCollect}',
+                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                        ),
+                      ],
                     ],
                   ),
                 ],
@@ -1679,6 +1827,44 @@ class _OrderRequestCard extends StatelessWidget {
                             const SizedBox(height: 4),
                             Text(
                               '~${order.etaMin} min',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Container(
+                      width: 1,
+                      height: 30,
+                      color: const Color(0xFF3F3F3F),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: const [
+                                Icon(Icons.receipt_long_outlined, color: Color(0xFF94A3B8), size: 16),
+                                SizedBox(width: 4),
+                                Text(
+                                  'ORDER',
+                                  style: TextStyle(
+                                    color: Color(0xFF94A3B8),
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '₹${order.orderAmount}',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 16,

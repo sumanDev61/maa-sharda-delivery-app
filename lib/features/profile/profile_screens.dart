@@ -435,6 +435,219 @@ class DocumentsScreen extends StatelessWidget {
   }
 }
 
+class VehicleDetailsScreen extends StatefulWidget {
+  const VehicleDetailsScreen({super.key});
+
+  @override
+  State<VehicleDetailsScreen> createState() => _VehicleDetailsScreenState();
+}
+
+class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
+  final _numberController = TextEditingController();
+  final _licenseController = TextEditingController();
+  VehicleType _type = VehicleType.bike;
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _numberController.dispose();
+    _licenseController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    final state = AppStateScope.of(context);
+    await state.updateVehicle(
+      type: _type,
+      number: _numberController.text.trim(),
+      drivingLicenseNumber: _licenseController.text.trim(),
+    );
+    if (!mounted) return;
+    setState(() => _saving = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Vehicle details saved')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final s = AppStateScope.of(context);
+      if (_numberController.text.isEmpty) {
+        _numberController.text = s.rider.profile.vehicle.number;
+      }
+      if (_licenseController.text.isEmpty) {
+        _licenseController.text = s.rider.profile.drivingLicenseNumber;
+      }
+      if (_type == VehicleType.bike && s.rider.profile.vehicle.type != VehicleType.unknown) {
+        _type = s.rider.profile.vehicle.type;
+      }
+    });
+    return Scaffold(
+      appBar: AppBar(title: const Text('Vehicle details')),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    DropdownButtonFormField<VehicleType>(
+                      value: _type,
+                      decoration: const InputDecoration(
+                        labelText: 'Vehicle type',
+                        prefixIcon: Icon(Icons.two_wheeler_outlined),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: VehicleType.bike, child: Text('Bike')),
+                        DropdownMenuItem(value: VehicleType.scooter, child: Text('Scooter')),
+                        DropdownMenuItem(value: VehicleType.cycle, child: Text('Cycle')),
+                      ],
+                      onChanged: (v) => setState(() => _type = v ?? VehicleType.bike),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _numberController,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.confirmation_number_outlined),
+                        labelText: 'Vehicle number',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _licenseController,
+                      textInputAction: TextInputAction.done,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.badge_outlined),
+                        labelText: 'Driving license number',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            PrimaryButton(
+              label: 'Save',
+              isLoading: _saving,
+              onPressed: _saving ? null : _save,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class BankDetailsScreen extends StatefulWidget {
+  const BankDetailsScreen({super.key});
+
+  @override
+  State<BankDetailsScreen> createState() => _BankDetailsScreenState();
+}
+
+class _BankDetailsScreenState extends State<BankDetailsScreen> {
+  final _holderController = TextEditingController();
+  final _accountController = TextEditingController();
+  final _ifscController = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _holderController.dispose();
+    _accountController.dispose();
+    _ifscController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    final state = AppStateScope.of(context);
+    await state.updateBank(
+      holder: _holderController.text.trim(),
+      account: _accountController.text.trim(),
+      ifsc: _ifscController.text.trim(),
+    );
+    if (!mounted) return;
+    setState(() => _saving = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Bank details saved')),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final s = AppStateScope.of(context);
+      if (_holderController.text.isEmpty) {
+        _holderController.text = s.rider.profile.bank.holderName;
+      }
+      if (_accountController.text.isEmpty) {
+        _accountController.text = s.rider.profile.bank.accountNumber;
+      }
+      if (_ifscController.text.isEmpty) {
+        _ifscController.text = s.rider.profile.bank.ifsc;
+      }
+    });
+    return Scaffold(
+      appBar: AppBar(title: const Text('Bank details')),
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: _holderController,
+                      textInputAction: TextInputAction.next,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.person_outline),
+                        labelText: 'Account holder name',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _accountController,
+                      textInputAction: TextInputAction.next,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.account_balance_outlined),
+                        labelText: 'Account number',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _ifscController,
+                      textInputAction: TextInputAction.done,
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.confirmation_number_outlined),
+                        labelText: 'IFSC code',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 14),
+            PrimaryButton(
+              label: 'Save',
+              isLoading: _saving,
+              onPressed: _saving ? null : _save,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
 

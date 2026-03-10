@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../../app/app_state.dart';
 import '../../app/theme/app_theme.dart';
-import '../../ui/primary_button.dart';
+import '../../core/api/api_client.dart';
 
 class OnboardingFlow extends StatefulWidget {
   const OnboardingFlow({super.key});
@@ -31,7 +34,7 @@ class _OnboardingFlowState extends State<OnboardingFlow> {
         onFinish: () {
           final state = AppStateScope.of(context);
           state.setBackgroundVerification(VerificationStatus.inReview);
-          Navigator.of(context).pushReplacementNamed('/home');
+          Navigator.of(context).pushReplacementNamed('/under-review');
         },
       ),
     ];
@@ -222,6 +225,7 @@ class _PersonalStepState extends State<_PersonalStep> {
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
   final _addressController = TextEditingController();
+  String _city = '';
 
   @override
   void dispose() {
@@ -231,9 +235,84 @@ class _PersonalStepState extends State<_PersonalStep> {
     super.dispose();
   }
 
+  static const List<String> _cities = <String>[
+    'Bhopal',
+    'Indore',
+    'Jabalpur',
+    'Gwalior',
+    'Ujjain',
+    'Sagar',
+    'Satna',
+    'Rewa',
+  ];
+
+  Future<void> _pickCity(AppState state) async {
+    final picked = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        final controller = TextEditingController();
+        var q = '';
+        return StatefulBuilder(
+          builder: (context, setInner) {
+            final list = _cities
+                .where((c) => c.toLowerCase().contains(q.toLowerCase().trim()))
+                .toList(growable: false);
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: controller,
+                      onChanged: (v) => setInner(() => q = v),
+                      decoration: const InputDecoration(
+                        prefixIcon: Icon(Icons.search),
+                        hintText: 'Search city',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Flexible(
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: list.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (context, i) {
+                          final c = list[i];
+                          return ListTile(
+                            title: Text(c),
+                            trailing: _city == c
+                                ? const Icon(Icons.check, color: Color(0xFF00E676))
+                                : null,
+                            onTap: () => Navigator.of(context).pop(c),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (picked == null) return;
+    setState(() => _city = picked);
+    // Persist early so back/forward keeps value even if user exits onboarding.
+    await state.updateGeneralInfo(
+      name: _nameController.text.trim().isEmpty ? state.rider.profile.name : _nameController.text.trim(),
+      city: picked,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = AppStateScope.of(context);
+    if (_city.isEmpty && state.rider.profile.city.isNotEmpty) {
+      _city = state.rider.profile.city;
+    }
     return _OnboardingScaffold(
       currentStep: 1,
       totalSteps: 4,
@@ -262,12 +341,13 @@ class _PersonalStepState extends State<_PersonalStep> {
       ),
       subtitle: 'Join our community of drivers and start earning today.',
       primaryLabel: 'Next',
-      primaryEnabled: _nameController.text.trim().isNotEmpty,
+      primaryEnabled: _nameController.text.trim().isNotEmpty && _city.trim().isNotEmpty,
       onPrimary: () {
         state.updateGeneralInfo(
           name: _nameController.text.trim(),
           email: _emailController.text.trim(),
           address: _addressController.text.trim(),
+          city: _city.trim(),
         );
         widget.onNext();
       },
@@ -340,11 +420,11 @@ class _PersonalStepState extends State<_PersonalStep> {
           const SizedBox(height: 8),
           Row(
             children: const [
-              Icon(Icons.verified_user_outlined, size: 14, color: Color(0xFF94A3B8)),
+              Icon(Icons.verified, size: 14, color: Color(0xFF00E676)),
               SizedBox(width: 6),
               Text(
-                'We will send an OTP to verify.',
-                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                'Verified',
+                style: TextStyle(color: Color(0xFF00E676), fontSize: 13, fontWeight: FontWeight.w700),
               ),
             ],
           ),
@@ -358,12 +438,17 @@ class _PersonalStepState extends State<_PersonalStep> {
             ),
           ),
           const SizedBox(height: 8),
-          TextField(
-            readOnly: true,
-            decoration: const InputDecoration(
-              hintText: 'Search your city',
-              prefixIcon: Icon(Icons.location_on_outlined, color: Color(0xFF94A3B8)),
-              suffixIcon: Icon(Icons.keyboard_arrow_down, color: Color(0xFF94A3B8)),
+          GestureDetector(
+            onTap: () => _pickCity(state),
+            child: AbsorbPointer(
+              child: TextField(
+                readOnly: true,
+                decoration: InputDecoration(
+                  hintText: _city.isEmpty ? 'Search your city' : _city,
+                  prefixIcon: const Icon(Icons.location_on_outlined, color: Color(0xFF94A3B8)),
+                  suffixIcon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF94A3B8)),
+                ),
+              ),
             ),
           ),
         ],
@@ -397,6 +482,11 @@ class _VehicleStepState extends State<_VehicleStep> {
   @override
   Widget build(BuildContext context) {
     final state = AppStateScope.of(context);
+    final reg = _regController.text.trim();
+    final lic = _licController.text.trim();
+    final regOk = reg.isNotEmpty;
+    final licOk = lic.isNotEmpty;
+    final canContinue = regOk && licOk;
     return _OnboardingScaffold(
       currentStep: 2,
       totalSteps: 4,
@@ -414,7 +504,7 @@ class _VehicleStepState extends State<_VehicleStep> {
       subtitle: 'Tell us what you drive to get started.',
       primaryLabel: 'Next Step',
       onPrimary: () {
-        state.updateVehicle(type: _type, number: _regController.text.trim());
+        state.updateVehicle(type: _type, number: reg, drivingLicenseNumber: lic);
         widget.onNext();
       },
       footer: Padding(
@@ -437,10 +527,16 @@ class _VehicleStepState extends State<_VehicleStep> {
             const SizedBox(width: 16),
             Expanded(
               child: ElevatedButton(
-                onPressed: () {
-                  state.updateVehicle(type: _type, number: _regController.text.trim());
-                  widget.onNext();
-                },
+                onPressed: canContinue
+                    ? () {
+                        state.updateVehicle(
+                          type: _type,
+                          number: reg,
+                          drivingLicenseNumber: lic,
+                        );
+                        widget.onNext();
+                      }
+                    : null,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF00E676),
                   foregroundColor: Colors.white,
@@ -520,6 +616,7 @@ class _VehicleStepState extends State<_VehicleStep> {
           const SizedBox(height: 10),
           _DarkField(
             controller: _regController,
+            onChanged: (_) => setState(() {}),
             hint: 'MP 04 AB 1234',
             icon: Icons.location_on_outlined,
           ),
@@ -540,6 +637,7 @@ class _VehicleStepState extends State<_VehicleStep> {
           const SizedBox(height: 10),
           _DarkField(
             controller: _licController,
+            onChanged: (_) => setState(() {}),
             hint: 'DL-1234567890123',
             icon: Icons.badge_outlined,
           ),
@@ -638,20 +736,22 @@ class _DarkField extends StatelessWidget {
     required this.controller,
     required this.hint,
     required this.icon,
+    this.onChanged,
   });
 
   final TextEditingController controller;
   final String hint;
   final IconData icon;
+  final ValueChanged<String>? onChanged;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       height: 56,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: const Color(0xFF0B1220),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
+        border: Border.all(color: Colors.white.withOpacity(0.2)),
       ),
       child: Row(
         children: [
@@ -664,7 +764,9 @@ class _DarkField extends StatelessWidget {
           Expanded(
             child: TextField(
               controller: controller,
+              onChanged: onChanged,
               style: const TextStyle(color: Colors.white, fontSize: 16),
+              cursorColor: Colors.white,
               decoration: InputDecoration(
                 hintText: hint,
                 hintStyle: TextStyle(color: Colors.white.withOpacity(0.2)),
@@ -809,21 +911,103 @@ class _DocumentsStep extends StatefulWidget {
 
 class _DocumentsStepState extends State<_DocumentsStep> {
   bool _uploading = false;
+  final Map<DocumentType, DocumentStatus> _localStatuses = {};
 
   bool _isComplete(AppState state) => state.rider.profile.documents.mandatoryComplete;
 
+  DocumentStatus _statusFor(DocumentType type, DocumentsState docs) {
+    return _localStatuses[type] ??
+        switch (type) {
+          DocumentType.idProof => docs.idProof,
+          DocumentType.drivingLicense => docs.drivingLicense,
+          DocumentType.vehicleRc => docs.vehicleRc,
+        };
+  }
+
+  static String _docKey(DocumentType type) => switch (type) {
+        DocumentType.idProof => 'aadhar',
+        DocumentType.drivingLicense => 'license',
+        DocumentType.vehicleRc => 'rc',
+      };
+
+  Future<File?> _pickFile() async {
+    final res = await FilePicker.platform.pickFiles(
+      allowMultiple: false,
+      type: FileType.custom,
+      allowedExtensions: const ['jpg', 'jpeg', 'png', 'pdf'],
+    );
+    final path = res?.files.single.path;
+    if (path == null) return null;
+    return File(path);
+  }
+
+  Future<File?> _pickFromCamera() async {
+    final picker = ImagePicker();
+    final x = await picker.pickImage(source: ImageSource.camera, imageQuality: 85);
+    if (x == null) return null;
+    return File(x.path);
+  }
+
   Future<void> _upload(AppState state, DocumentType type) async {
+    final src = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera_outlined),
+                title: const Text('Use camera'),
+                onTap: () => Navigator.of(context).pop('camera'),
+              ),
+              ListTile(
+                leading: const Icon(Icons.folder_open_outlined),
+                title: const Text('Choose file'),
+                onTap: () => Navigator.of(context).pop('file'),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+    if (src == null) return;
     setState(() => _uploading = true);
-    await Future<void>.delayed(const Duration(milliseconds: 400));
-    if (!mounted) return;
-    state.setDocumentStatus(type, DocumentStatus.pending);
-    setState(() => _uploading = false);
+    try {
+      final file = src == 'camera' ? await _pickFromCamera() : await _pickFile();
+      if (!mounted) return;
+      if (file == null) {
+        setState(() => _uploading = false);
+        return;
+      }
+      await state.uploadDocument(type: type, file: file);
+      await state.setDocumentStatus(type, DocumentStatus.pending);
+      if (!mounted) return;
+      setState(() => _localStatuses[type] = DocumentStatus.pending);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Uploaded ${_docKey(type)}. Pending verification.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Upload failed. Please try again.')),
+      );
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final state = AppStateScope.of(context);
     final docs = state.rider.profile.documents;
+    final idStatus = _statusFor(DocumentType.idProof, docs);
+    final licStatus = _statusFor(DocumentType.drivingLicense, docs);
+    final rcStatus = _statusFor(DocumentType.vehicleRc, docs);
+    final allUploaded = idStatus != DocumentStatus.missing &&
+        licStatus != DocumentStatus.missing &&
+        rcStatus != DocumentStatus.missing;
     return _OnboardingScaffold(
       currentStep: 4,
       totalSteps: 4,
@@ -832,32 +1016,29 @@ class _DocumentsStepState extends State<_DocumentsStep> {
       secondaryLabel: 'Back',
       onSecondary: widget.onBack,
       primaryLabel: 'Finish',
-      primaryEnabled: _isComplete(state) && !_uploading,
+      primaryEnabled: allUploaded && !_uploading,
       onPrimary: () {
         widget.onFinish();
-        Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => const ApplicationReviewScreen()),
-        );
       },
       child: ListView(
         children: [
           _docCard(
             title: 'ID proof',
-            status: docs.idProof,
+            status: idStatus,
             onTap: () => _upload(state, DocumentType.idProof),
             disabled: _uploading,
           ),
           const SizedBox(height: 10),
           _docCard(
             title: 'Driving license',
-            status: docs.drivingLicense,
+            status: licStatus,
             onTap: () => _upload(state, DocumentType.drivingLicense),
             disabled: _uploading,
           ),
           const SizedBox(height: 10),
           _docCard(
             title: 'Vehicle RC',
-            status: docs.vehicleRc,
+            status: rcStatus,
             onTap: () => _upload(state, DocumentType.vehicleRc),
             disabled: _uploading,
           ),
@@ -936,14 +1117,15 @@ class ApplicationReviewScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final state = AppStateScope.of(context);
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
           child: Column(
             children: [
-              const SizedBox(height: 40),
+              const SizedBox(height: 16),
               const Text(
                 'MAA SHARDA GO',
                 style: TextStyle(
@@ -953,7 +1135,7 @@ class ApplicationReviewScreen extends StatelessWidget {
                   letterSpacing: 1.2,
                 ),
               ),
-              const Spacer(),
+              const SizedBox(height: 40),
               Container(
                 width: 100,
                 height: 100,
@@ -961,38 +1143,46 @@ class ApplicationReviewScreen extends StatelessWidget {
                   color: const Color(0xFF00E676).withOpacity(0.1),
                   shape: BoxShape.circle,
                 ),
-                child: const Center(
+                child: Center(
                   child: Icon(
-                    Icons.check_circle,
-                    color: Color(0xFF00E676),
+                    state.rider.verification == VerificationStatus.rejected
+                        ? Icons.cancel
+                        : Icons.check_circle,
+                    color: state.rider.verification == VerificationStatus.rejected
+                        ? const Color(0xFFEF4444)
+                        : const Color(0xFF00E676),
                     size: 60,
                   ),
                 ),
               ),
-              const SizedBox(height: 32),
-              const Text(
-                'Application Under Review',
+              const SizedBox(height: 20),
+              Text(
+                state.rider.verification == VerificationStatus.rejected
+                    ? 'Application Rejected'
+                    : 'Application Under Review',
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w900,
                   color: Color(0xFF1E293B),
                 ),
               ),
-              const SizedBox(height: 16),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 16),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Text(
-                  'Thank you for registering with us. We will verify your documents (Aadhar, License, RC) and get back to you shortly.',
+                  state.rider.verification == VerificationStatus.rejected
+                      ? 'Your application was rejected. Please re-upload documents or contact support.'
+                      : 'Thank you for registering with us. We will verify your documents (Aadhar, License, RC) and get back to you shortly.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 15,
                     color: Color(0xFF64748B),
                     height: 1.5,
                   ),
                 ),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 28),
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
@@ -1013,7 +1203,10 @@ class ApplicationReviewScreen extends StatelessWidget {
                           ),
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
                           decoration: BoxDecoration(
                             color: const Color(0xFFE2F9EB),
                             borderRadius: BorderRadius.circular(6),
@@ -1030,7 +1223,7 @@ class ApplicationReviewScreen extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 24),
-                    _TimelineItem(
+                    const _TimelineItem(
                       title: 'Submission Received',
                       subtitle: 'Your application has been logged.',
                       isDone: true,
@@ -1038,11 +1231,13 @@ class ApplicationReviewScreen extends StatelessWidget {
                     _TimelineItem(
                       title: 'Document Verification',
                       subtitle: 'Checking Aadhar & License details.',
-                      isActive: true,
+                      isDone: state.rider.profile.documents.mandatoryComplete,
+                      isActive: !state.rider.profile.documents.mandatoryComplete,
                     ),
                     _TimelineItem(
                       title: 'Approval',
                       subtitle: 'Final activation for driving.',
+                      isDone: state.rider.verification == VerificationStatus.verified,
                       isLast: true,
                     ),
                   ],
@@ -1054,15 +1249,17 @@ class ApplicationReviewScreen extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: const Color(0xFFE2F9EB).withOpacity(0.5),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF00E676).withOpacity(0.1)),
+                  border: Border.all(
+                    color: const Color(0xFF00E676).withOpacity(0.1),
+                  ),
                 ),
-                child: Row(
+                child: const Row(
                   children: [
-                    const Icon(Icons.access_time, color: Color(0xFF00E676)),
-                    const SizedBox(width: 16),
+                    Icon(Icons.access_time, color: Color(0xFF00E676)),
+                    SizedBox(width: 16),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: const [
+                      children: [
                         Text(
                           'ESTIMATED WAIT',
                           style: TextStyle(
@@ -1085,14 +1282,26 @@ class ApplicationReviewScreen extends StatelessWidget {
                   ],
                 ),
               ),
-              const Spacer(),
+              const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton.icon(
-                  onPressed: () => Navigator.of(context).pushReplacementNamed('/home'),
-                  icon: const Icon(Icons.home_outlined),
-                  label: const Text('Back to Home'),
+                  onPressed: () async {
+                    try {
+                      await state.login(phone: state.rider.session.phone);
+                    } catch (_) {}
+                    if (!context.mounted) return;
+                    if (state.rider.verification == VerificationStatus.verified) {
+                      Navigator.of(context).pushReplacementNamed('/home');
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Still under review')),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Refresh status'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF00E676),
                     foregroundColor: Colors.white,
@@ -1107,9 +1316,14 @@ class ApplicationReviewScreen extends StatelessWidget {
                 width: double.infinity,
                 height: 56,
                 child: OutlinedButton.icon(
-                  onPressed: () {},
-                  icon: const Icon(Icons.support_agent),
-                  label: const Text('Contact Support'),
+                  onPressed: () async {
+                    state.logout();
+                    await ApiClient().clearSession();
+                    if (!context.mounted) return;
+                    Navigator.of(context).pushReplacementNamed('/auth');
+                  },
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Logout'),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: const Color(0xFF1E293B),
                     side: const BorderSide(color: Color(0xFFE2E8F0)),
