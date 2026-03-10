@@ -100,7 +100,9 @@ class _HomeTab extends StatelessWidget {
           leading: const Padding(
             padding: EdgeInsets.all(8.0),
             child: CircleAvatar(
-              backgroundImage: NetworkImage('https://i.pravatar.cc/150?u=rider'),
+              backgroundImage: NetworkImage(
+                'https://i.pravatar.cc/150?u=rider',
+              ),
             ),
           ),
           title: Column(
@@ -117,7 +119,7 @@ class _HomeTab extends StatelessWidget {
               ),
               Row(
                 children: [
-                   Container(
+                  Container(
                     width: 8,
                     height: 8,
                     decoration: const BoxDecoration(
@@ -643,7 +645,10 @@ class _EarningsTabState extends State<_EarningsTab> {
                         ),
                         Text(
                           'Mon - Sun',
-                          style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                          style: TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 12,
+                          ),
                         ),
                       ],
                     ),
@@ -670,32 +675,38 @@ class _EarningsTabState extends State<_EarningsTab> {
                 const SizedBox(height: 48),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'
-                  ].map((day) {
-                    final isToday = day == 'Fri';
-                    return Column(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: day == 'Wed' ? 80 : 40,
-                          decoration: BoxDecoration(
-                            color: isToday ? const Color(0xFF00E676) : const Color(0xFF2D3C2F),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          day,
-                          style: TextStyle(
-                            color: isToday ? const Color(0xFF00E676) : const Color(0xFF64748B),
-                            fontSize: 11,
-                            fontWeight: isToday ? FontWeight.w900 : FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    );
-                  }).toList(),
+                  children: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                      .map((day) {
+                        final isToday = day == 'Fri';
+                        return Column(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: day == 'Wed' ? 80 : 40,
+                              decoration: BoxDecoration(
+                                color: isToday
+                                    ? const Color(0xFF00E676)
+                                    : const Color(0xFF2D3C2F),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              day,
+                              style: TextStyle(
+                                color: isToday
+                                    ? const Color(0xFF00E676)
+                                    : const Color(0xFF64748B),
+                                fontSize: 11,
+                                fontWeight: isToday
+                                    ? FontWeight.w900
+                                    : FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        );
+                      })
+                      .toList(),
                 ),
               ],
             ),
@@ -747,12 +758,16 @@ class _EarningsTabState extends State<_EarningsTab> {
             ),
           ),
           const SizedBox(height: 16),
-          ...state.earnings.trips.take(10).map((t) => _tripTile(
-                t.orderId == 0 ? 'Order' : 'Order #${t.orderId}',
-                '${t.createdAt.hour}:${t.createdAt.minute.toString().padLeft(2, '0')}',
-                '₹ ${t.total.toStringAsFixed(0)}',
-                Icons.directions_bike,
-              )),
+          ...state.earnings.trips
+              .take(10)
+              .map(
+                (t) => _tripTile(
+                  t.orderId == 0 ? 'Order' : 'Order #${t.orderId}',
+                  '${t.createdAt.hour}:${t.createdAt.minute.toString().padLeft(2, '0')}',
+                  '₹ ${t.total.toStringAsFixed(0)}',
+                  Icons.directions_bike,
+                ),
+              ),
           const SizedBox(height: 24),
         ],
       ),
@@ -768,15 +783,42 @@ class _EarningsTabState extends State<_EarningsTab> {
       crossAxisSpacing: 12,
       childAspectRatio: 1.6,
       children: [
-        _breakdownCard('Base Pay', '₹85.00', Icons.local_shipping_outlined, const Color(0xFF3B82F6)),
-        _breakdownCard('Tips', '₹42.50', Icons.favorite_border, const Color(0xFFA855F7)),
-        _breakdownCard('Incentives', '₹15.00', Icons.local_fire_department_outlined, const Color(0xFFF97316)),
-        _breakdownCard('Total Today', '₹142.50', Icons.account_balance_wallet_outlined, const Color(0xFF00E676), isTotal: true),
+        _breakdownCard(
+          'Base Pay',
+          '₹85.00',
+          Icons.local_shipping_outlined,
+          const Color(0xFF3B82F6),
+        ),
+        _breakdownCard(
+          'Tips',
+          '₹42.50',
+          Icons.favorite_border,
+          const Color(0xFFA855F7),
+        ),
+        _breakdownCard(
+          'Incentives',
+          '₹15.00',
+          Icons.local_fire_department_outlined,
+          const Color(0xFFF97316),
+        ),
+        _breakdownCard(
+          'Total Today',
+          '₹142.50',
+          Icons.account_balance_wallet_outlined,
+          const Color(0xFF00E676),
+          isTotal: true,
+        ),
       ],
     );
   }
 
-  Widget _breakdownCard(String label, String value, IconData icon, Color color, {bool isTotal = false}) {
+  Widget _breakdownCard(
+    String label,
+    String value,
+    IconData icon,
+    Color color, {
+    bool isTotal = false,
+  }) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -792,7 +834,11 @@ class _EarningsTabState extends State<_EarningsTab> {
               const SizedBox(width: 8),
               Text(
                 label,
-                style: const TextStyle(color: Color(0xFF64748B), fontSize: 11, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  color: Color(0xFF64748B),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
           ),
@@ -814,7 +860,12 @@ class _EarningsTabState extends State<_EarningsTab> {
     return [
       _tripTile('Burger King', '2.4 mi • 2:30 PM', '₹12.50', Icons.fastfood),
       _tripTile('Pizza Hut', '5.1 mi • 1:15 PM', '₹18.25', Icons.local_pizza),
-      _tripTile('Noodle House', '1.2 mi • 12:45 PM', '₹9.50', Icons.ramen_dining),
+      _tripTile(
+        'Noodle House',
+        '1.2 mi • 12:45 PM',
+        '₹9.50',
+        Icons.ramen_dining,
+      ),
     ];
   }
 
@@ -843,11 +894,17 @@ class _EarningsTabState extends State<_EarningsTab> {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
                 Text(
                   subtitle,
-                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                  style: const TextStyle(
+                    color: Color(0xFF64748B),
+                    fontSize: 12,
+                  ),
                 ),
               ],
             ),
@@ -857,7 +914,11 @@ class _EarningsTabState extends State<_EarningsTab> {
             children: [
               Text(
                 price,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 16),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
+                ),
               ),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -867,7 +928,11 @@ class _EarningsTabState extends State<_EarningsTab> {
                 ),
                 child: const Text(
                   'Completed',
-                  style: TextStyle(color: Color(0xFF00E676), fontSize: 9, fontWeight: FontWeight.w800),
+                  style: TextStyle(
+                    color: Color(0xFF00E676),
+                    fontSize: 9,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ),
             ],
@@ -1071,20 +1136,16 @@ class _ProfileTab extends StatelessWidget {
                           icon: Icons.two_wheeler_outlined,
                           title: 'Vehicle details',
                           subtitle: 'Bike, RC, insurance',
-                          onTap: () => _push(
-                            context,
-                            const VehicleDetailsScreen(),
-                          ),
+                          onTap: () =>
+                              _push(context, const VehicleDetailsScreen()),
                         ),
                         const Divider(height: 1),
                         _ProfileTile(
                           icon: Icons.account_balance_outlined,
                           title: 'Bank details',
                           subtitle: 'Payout account',
-                          onTap: () => _push(
-                            context,
-                            const BankDetailsScreen(),
-                          ),
+                          onTap: () =>
+                              _push(context, const BankDetailsScreen()),
                         ),
                         const Divider(height: 1),
                         _ProfileTile(
@@ -1718,16 +1779,26 @@ class _OrderRequestCard extends StatelessWidget {
                         ),
                         Row(
                           children: [
-                            const Icon(Icons.star, color: Color(0xFFF59E0B), size: 14),
+                            const Icon(
+                              Icons.star,
+                              color: Color(0xFFF59E0B),
+                              size: 14,
+                            ),
                             const SizedBox(width: 4),
                             const Text(
                               '4.5',
-                              style: TextStyle(color: Colors.white, fontSize: 13),
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                              ),
                             ),
                             const SizedBox(width: 8),
                             Text(
                               '• ${order.items.length} items',
-                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                              style: const TextStyle(
+                                color: Color(0xFF94A3B8),
+                                fontSize: 13,
+                              ),
                             ),
                           ],
                         ),
@@ -1747,13 +1818,19 @@ class _OrderRequestCard extends StatelessWidget {
                       ),
                       const Text(
                         'Est. Earning',
-                        style: TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                        style: TextStyle(
+                          color: Color(0xFF94A3B8),
+                          fontSize: 10,
+                        ),
                       ),
                       if (order.cashToCollect > 0) ...[
                         const SizedBox(height: 4),
                         Text(
                           'COD ₹${order.cashToCollect}',
-                          style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 10),
+                          style: const TextStyle(
+                            color: Color(0xFF94A3B8),
+                            fontSize: 10,
+                          ),
                         ),
                       ],
                     ],
@@ -1775,7 +1852,11 @@ class _OrderRequestCard extends StatelessWidget {
                         children: [
                           Row(
                             children: const [
-                              Icon(Icons.location_on, color: Color(0xFF94A3B8), size: 16),
+                              Icon(
+                                Icons.location_on,
+                                color: Color(0xFF94A3B8),
+                                size: 16,
+                              ),
                               SizedBox(width: 4),
                               Text(
                                 'DISTANCE',
@@ -1812,7 +1893,11 @@ class _OrderRequestCard extends StatelessWidget {
                           children: [
                             Row(
                               children: const [
-                                Icon(Icons.access_time, color: Color(0xFF94A3B8), size: 16),
+                                Icon(
+                                  Icons.access_time,
+                                  color: Color(0xFF94A3B8),
+                                  size: 16,
+                                ),
                                 SizedBox(width: 4),
                                 Text(
                                   'TIME',
@@ -1850,7 +1935,11 @@ class _OrderRequestCard extends StatelessWidget {
                           children: [
                             Row(
                               children: const [
-                                Icon(Icons.receipt_long_outlined, color: Color(0xFF94A3B8), size: 16),
+                                Icon(
+                                  Icons.receipt_long_outlined,
+                                  color: Color(0xFF94A3B8),
+                                  size: 16,
+                                ),
                                 SizedBox(width: 4),
                                 Text(
                                   'ORDER',
@@ -1883,7 +1972,9 @@ class _OrderRequestCard extends StatelessWidget {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: canAct ? () => state.rejectOrder(order.id) : null,
+                      onPressed: canAct
+                          ? () => state.rejectOrder(order.id)
+                          : null,
                       style: OutlinedButton.styleFrom(
                         side: const BorderSide(color: Color(0xFF3F3F3F)),
                         padding: const EdgeInsets.symmetric(vertical: 18),
@@ -1894,7 +1985,10 @@ class _OrderRequestCard extends StatelessWidget {
                       ),
                       child: const Text(
                         'Reject',
-                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 16,
+                        ),
                       ),
                     ),
                   ),
@@ -1902,17 +1996,22 @@ class _OrderRequestCard extends StatelessWidget {
                   Expanded(
                     flex: 2,
                     child: ElevatedButton(
-                      onPressed: canAct ? () async {
-                        final ok = await state.acceptOrder(order.id);
-                        if (!ok) return;
-                        Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => DeliveryFlowScreen(orderId: order.id),
-                          ),
-                        );
-                      } : null,
+                      onPressed: canAct
+                          ? () async {
+                              final ok = await state.acceptOrder(order.id);
+                              if (!ok) return;
+                              Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) =>
+                                      DeliveryFlowScreen(orderId: order.id),
+                                ),
+                              );
+                            }
+                          : null,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFEF4444), // Red as per image
+                        backgroundColor: const Color(
+                          0xFFEF4444,
+                        ), // Red as per image
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(vertical: 18),
                         shape: RoundedRectangleBorder(
@@ -1924,7 +2023,10 @@ class _OrderRequestCard extends StatelessWidget {
                         children: const [
                           Text(
                             'Accept Order',
-                            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                            ),
                           ),
                           SizedBox(width: 8),
                           Icon(Icons.arrow_forward),

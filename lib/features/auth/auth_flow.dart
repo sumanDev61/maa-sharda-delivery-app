@@ -47,6 +47,19 @@ class _AuthFlowState extends State<AuthFlow> {
           _otp = otp;
           _step = AuthStep.otp;
         }),
+        onRegister: (phone) => setState(() {
+          _phone = phone;
+          _step = AuthStep.register;
+        }),
+      ),
+      AuthStep.register => _RegisterScreen(
+        phone: _phone,
+        onContinue: (phone, riderId, otp) => setState(() {
+          _phone = phone;
+          _riderId = riderId;
+          _otp = otp;
+          _step = AuthStep.otp;
+        }),
       ),
       AuthStep.otp => _OtpScreen(
         phone: _phone,
@@ -57,8 +70,8 @@ class _AuthFlowState extends State<AuthFlow> {
           final next = !state.isOnboardingComplete
               ? '/onboarding'
               : (state.rider.verification == VerificationStatus.verified
-                  ? '/home'
-                  : '/under-review');
+                    ? '/home'
+                    : '/under-review');
           Navigator.of(context).pushReplacementNamed(next);
         },
         onBack: () => setState(() => _step = AuthStep.login),
@@ -67,7 +80,7 @@ class _AuthFlowState extends State<AuthFlow> {
   }
 }
 
-enum AuthStep { splash, login, otp }
+enum AuthStep { splash, login, register, otp }
 
 class _SplashScreen extends StatelessWidget {
   const _SplashScreen();
@@ -117,9 +130,10 @@ class _SplashScreen extends StatelessWidget {
 }
 
 class _LoginScreen extends StatefulWidget {
-  const _LoginScreen({required this.onContinue});
+  const _LoginScreen({required this.onContinue, required this.onRegister});
 
   final void Function(String phone, String riderId, String? otp) onContinue;
+  final void Function(String phone) onRegister;
 
   @override
   State<_LoginScreen> createState() => _LoginScreenState();
@@ -267,9 +281,10 @@ class _LoginScreenState extends State<_LoginScreen> {
     }
     setState(() => _loading = true);
     try {
-      final res = await ApiClient().post('/v1/delivery/login', body: {
-        'phone': digits,
-      });
+      final res = await ApiClient().post(
+        '/v1/delivery/login',
+        body: {'phone': digits},
+      );
       if (!mounted) return;
 
       if (res.statusCode == 200) {
@@ -286,32 +301,22 @@ class _LoginScreenState extends State<_LoginScreen> {
       }
 
       if (res.statusCode == 404) {
-        final reg = await ApiClient().post('/v1/delivery/register', body: {
-          'phone': digits,
-        });
-        if (!mounted) return;
-        if (reg.statusCode == 200) {
-          final data = jsonDecode(reg.body) as Map<String, dynamic>;
-          final d = (data['data'] as Map?)?.cast<String, dynamic>() ?? {};
-          final riderId = d['rider_id']?.toString() ?? '';
-          final otp = d['otp']?.toString();
-          if (riderId.isEmpty) throw Exception('Invalid response');
-          setState(() => _loading = false);
-          widget.onContinue(digits, riderId, otp);
-          return;
-        }
+        setState(() => _loading = false);
+        widget.onRegister(digits);
+        return;
       }
 
       setState(() => _loading = false);
-      final msg = (jsonDecode(res.body) as Map?)?['error']?.toString() ??
+      final msg =
+          (jsonDecode(res.body) as Map?)?['error']?.toString() ??
           'Login failed';
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Network error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Network error: $e')));
     }
   }
 
@@ -366,8 +371,8 @@ class _LoginScreenState extends State<_LoginScreen> {
                   hintText: _isDetectingSim
                       ? 'Detecting SIM numbers...'
                       : (_simNumbers.isNotEmpty
-                          ? 'Tap to pick SIM number'
-                          : 'Phone number'),
+                            ? 'Tap to pick SIM number'
+                            : 'Phone number'),
                   suffixIcon: _simNumbers.isNotEmpty
                       ? IconButton(
                           onPressed: _suggestSimNumber,
@@ -393,6 +398,130 @@ class _LoginScreenState extends State<_LoginScreen> {
                   onPressed: _controller.text.trim().length < 10
                       ? null
                       : _submit,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RegisterScreen extends StatefulWidget {
+  const _RegisterScreen({required this.phone, required this.onContinue});
+
+  final String phone;
+  final void Function(String phone, String riderId, String? otp) onContinue;
+
+  @override
+  State<_RegisterScreen> createState() => _RegisterScreenState();
+}
+
+class _RegisterScreenState extends State<_RegisterScreen> {
+  final _nameController = TextEditingController();
+  final _emailController = TextEditingController();
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _emailController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _register() async {
+    final name = _nameController.text.trim();
+    final email = _emailController.text.trim();
+    if (name.isEmpty || email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter name and email')),
+      );
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      final res = await ApiClient().post(
+        '/v1/delivery/register',
+        body: {'phone': widget.phone, 'name': name, 'email': email},
+      );
+      if (!mounted) return;
+
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        final d = (data['data'] as Map?)?.cast<String, dynamic>() ?? {};
+        final riderId = d['rider_id']?.toString() ?? '';
+        final otp = d['otp']?.toString();
+        if (riderId.isEmpty) {
+          throw Exception('Invalid response');
+        }
+        setState(() => _loading = false);
+        widget.onContinue(widget.phone, riderId, otp);
+        return;
+      }
+
+      setState(() => _loading = false);
+      final msg =
+          (jsonDecode(res.body) as Map?)?['error']?.toString() ??
+          'Registration failed';
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Network error: $e')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(title: const Text('Create Account')),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 18),
+              Text('New here?', style: textTheme.titleLarge),
+              const SizedBox(height: 6),
+              Text(
+                'Create your account to continue.',
+                style: textTheme.bodySmall,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Phone: ${widget.phone}',
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 24),
+              TextField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Name',
+                  hintText: 'Your name',
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  hintText: 'name@example.com',
+                ),
+              ),
+              const Spacer(),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 14),
+                child: PrimaryButton(
+                  label: 'Continue',
+                  isLoading: _loading,
+                  onPressed: _register,
                 ),
               ),
             ],
@@ -451,15 +580,15 @@ class _OtpScreenState extends State<_OtpScreen> {
   Future<void> _verify() async {
     if (_controller.text.trim().length != 6) return;
     setState(() => _loading = true);
-    
+
     try {
-      final res = await ApiClient().post('/v1/delivery/verify-otp', body: {
-        'rider_id': widget.riderId,
-        'otp': _controller.text.trim(),
-      });
-      
+      final res = await ApiClient().post(
+        '/v1/delivery/verify-otp',
+        body: {'rider_id': widget.riderId, 'otp': _controller.text.trim()},
+      );
+
       if (!mounted) return;
-      
+
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final token = data['token'] as String;
@@ -468,9 +597,9 @@ class _OtpScreenState extends State<_OtpScreen> {
         final phone = (data['rider']['phone'] as String?) ?? widget.phone;
         final approval =
             (data['rider']['approval_status'] as String?) ?? 'inReview';
-        
+
         await ApiClient().setAuthSession(token, riderId);
-        
+
         final state = AppStateScope.of(context);
         await state.login(phone: phone);
         if (name.isNotEmpty) {
@@ -481,19 +610,21 @@ class _OtpScreenState extends State<_OtpScreen> {
               ? VerificationStatus.verified
               : VerificationStatus.inReview,
         );
-        
+
         widget.onVerified();
       } else {
         setState(() => _loading = false);
         final msg = jsonDecode(res.body)['error'] ?? 'Verification failed';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(msg)));
       }
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Network error: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Network error: $e')));
     }
   }
 
@@ -585,12 +716,16 @@ class _OtpScreenState extends State<_OtpScreen> {
                               );
                               if (!mounted) return;
                               if (res.statusCode == 200) {
-                                final data = jsonDecode(res.body)
-                                    as Map<String, dynamic>;
-                                final d = (data['data'] as Map?)
+                                final data =
+                                    jsonDecode(res.body)
+                                        as Map<String, dynamic>;
+                                final d =
+                                    (data['data'] as Map?)
                                         ?.cast<String, dynamic>() ??
                                     {};
-                                setState(() => _shownOtp = d['otp']?.toString());
+                                setState(
+                                  () => _shownOtp = d['otp']?.toString(),
+                                );
                               }
                             } catch (_) {}
                             if (mounted) setState(() => _loading = false);

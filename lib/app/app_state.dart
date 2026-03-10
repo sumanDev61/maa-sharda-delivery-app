@@ -61,12 +61,15 @@ class AppState extends ChangeNotifier {
     });
     notifyListeners();
   }
+
   Future<void> _startRealtime() async {
     try {
       await ApiClient().init();
       final riderId = await _readRiderId();
       if (riderId == null) return;
-      final uri = Uri.parse('${ApiClient.baseUrl}/v1/sse/delivery?rider_id=$riderId');
+      final uri = Uri.parse(
+        '${ApiClient.baseUrl}/v1/sse/delivery?rider_id=$riderId',
+      );
       final client = http.Client();
       final req = http.Request('GET', uri);
       req.headers['Accept'] = 'text/event-stream';
@@ -78,6 +81,7 @@ class AppState extends ChangeNotifier {
       });
     } catch (_) {}
   }
+
   Future<String?> _readRiderId() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -117,7 +121,9 @@ class AppState extends ChangeNotifier {
         final rid = _idSeq++;
         _backendOrderId[rid] = backendId;
         final now = DateTime.now();
-        final cash = o['payment_method']?.toString().toUpperCase() == 'CASH' ? (o['amount'] as num?)?.toInt() ?? 0 : 0;
+        final cash = o['payment_method']?.toString().toUpperCase() == 'CASH'
+            ? (o['amount'] as num?)?.toInt() ?? 0
+            : 0;
         final amount = (o['amount'] as num?)?.toInt() ?? 0;
         final items = _parseItems(o['items']);
         final estEarn = _estimateEarning(amount, items.length);
@@ -161,7 +167,14 @@ class AppState extends ChangeNotifier {
       } catch (_) {}
     }
     if (req != null) {
-      orders.history.insert(0, OrderHistoryItem.fromRequest(req, status: OrderStatus.rejected, note: reason));
+      orders.history.insert(
+        0,
+        OrderHistoryItem.fromRequest(
+          req,
+          status: OrderStatus.rejected,
+          note: reason,
+        ),
+      );
     }
     notifyListeners();
   }
@@ -191,7 +204,10 @@ class AppState extends ChangeNotifier {
     final backendId = _backendOrderId[orderId];
     if (backendId != null) {
       try {
-        await ApiClient().put('/v1/delivery/orders/$backendId/status', body: {'status': 'DRIVER_ARRIVED_AT_MERCHANT'});
+        await ApiClient().put(
+          '/v1/delivery/orders/$backendId/status',
+          body: {'status': 'DRIVER_ARRIVED_AT_MERCHANT'},
+        );
       } catch (_) {}
     }
     order.progress = DeliveryProgress.reachedRestaurant;
@@ -205,7 +221,10 @@ class AppState extends ChangeNotifier {
     final backendId = _backendOrderId[orderId];
     if (backendId != null) {
       try {
-        await ApiClient().put('/v1/delivery/orders/$backendId/status', body: {'status': 'PICKED_UP'});
+        await ApiClient().put(
+          '/v1/delivery/orders/$backendId/status',
+          body: {'status': 'PICKED_UP'},
+        );
       } catch (_) {}
     }
     order.progress = DeliveryProgress.pickedUp;
@@ -219,7 +238,10 @@ class AppState extends ChangeNotifier {
     final backendId = _backendOrderId[orderId];
     if (backendId != null) {
       try {
-        await ApiClient().put('/v1/delivery/orders/$backendId/status', body: {'status': 'ARRIVED_AT_CUSTOMER'});
+        await ApiClient().put(
+          '/v1/delivery/orders/$backendId/status',
+          body: {'status': 'ARRIVED_AT_CUSTOMER'},
+        );
       } catch (_) {}
     }
     order.progress = DeliveryProgress.arrivedCustomer;
@@ -233,7 +255,10 @@ class AppState extends ChangeNotifier {
     final backendId = _backendOrderId[orderId];
     if (backendId != null) {
       try {
-        await ApiClient().put('/v1/delivery/orders/$backendId/status', body: {'status': 'DELIVERED'});
+        await ApiClient().put(
+          '/v1/delivery/orders/$backendId/status',
+          body: {'status': 'DELIVERED'},
+        );
       } catch (_) {}
     }
     order.progress = DeliveryProgress.delivered;
@@ -260,12 +285,15 @@ class AppState extends ChangeNotifier {
     String? city,
   }) async {
     try {
-      await ApiClient().put('/v1/delivery/profile', body: {
-        'name': name,
-        if (email != null) 'email': email,
-        if (address != null) 'address': address,
-        if (city != null) 'city': city,
-      });
+      await ApiClient().put(
+        '/v1/delivery/profile',
+        body: {
+          'name': name,
+          if (email != null) 'email': email,
+          if (address != null) 'address': address,
+          if (city != null) 'city': city,
+        },
+      );
     } catch (_) {}
     rider.profile = rider.profile.copyWith(
       name: name,
@@ -282,15 +310,25 @@ class AppState extends ChangeNotifier {
     String? drivingLicenseNumber,
   }) async {
     try {
-      await ApiClient().put('/v1/delivery/profile/vehicle', body: {
-        'type': switch (type) { VehicleType.bike => 'bike', VehicleType.scooter => 'scooter', VehicleType.cycle => 'cycle', _ => 'unknown' },
-        if (number != null) 'number': number,
-        if (drivingLicenseNumber != null) 'driving_license_number': drivingLicenseNumber,
-      });
+      await ApiClient().put(
+        '/v1/delivery/profile/vehicle',
+        body: {
+          'type': switch (type) {
+            VehicleType.bike => 'bike',
+            VehicleType.scooter => 'scooter',
+            VehicleType.cycle => 'cycle',
+            _ => 'unknown',
+          },
+          if (number != null) 'number': number,
+          if (drivingLicenseNumber != null)
+            'driving_license_number': drivingLicenseNumber,
+        },
+      );
     } catch (_) {}
     rider.profile = rider.profile.copyWith(
       vehicle: rider.profile.vehicle.copyWith(type: type, number: number),
-      drivingLicenseNumber: drivingLicenseNumber ?? rider.profile.drivingLicenseNumber,
+      drivingLicenseNumber:
+          drivingLicenseNumber ?? rider.profile.drivingLicenseNumber,
     );
     notifyListeners();
   }
@@ -301,11 +339,10 @@ class AppState extends ChangeNotifier {
     required String ifsc,
   }) async {
     try {
-      await ApiClient().put('/v1/delivery/profile/bank', body: {
-        'account_name': holder,
-        'account_number': account,
-        'ifsc': ifsc,
-      });
+      await ApiClient().put(
+        '/v1/delivery/profile/bank',
+        body: {'account_name': holder, 'account_number': account, 'ifsc': ifsc},
+      );
     } catch (_) {}
     rider.profile = rider.profile.copyWith(
       bank: BankDetails(holderName: holder, accountNumber: account, ifsc: ifsc),
@@ -313,10 +350,28 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> setDocumentStatus(DocumentType type, DocumentStatus status) async {
-    final doc = switch (type) { DocumentType.idProof => 'aadhar', DocumentType.drivingLicense => 'license', DocumentType.vehicleRc => 'rc' };
+  Future<void> setDocumentStatus(
+    DocumentType type,
+    DocumentStatus status,
+  ) async {
+    final doc = switch (type) {
+      DocumentType.idProof => 'aadhar',
+      DocumentType.drivingLicense => 'license',
+      DocumentType.vehicleRc => 'rc',
+    };
     try {
-      await ApiClient().post('/v1/delivery/profile/documents', body: {'doc': doc, 'status': switch (status) { DocumentStatus.verified => 'verified', DocumentStatus.pending => 'pending', DocumentStatus.rejected => 'rejected', _ => 'missing' }});
+      await ApiClient().post(
+        '/v1/delivery/profile/documents',
+        body: {
+          'doc': doc,
+          'status': switch (status) {
+            DocumentStatus.verified => 'verified',
+            DocumentStatus.pending => 'pending',
+            DocumentStatus.rejected => 'rejected',
+            _ => 'missing',
+          },
+        },
+      );
     } catch (_) {}
     final docs = rider.profile.documents.copyWithStatus(type, status);
     rider.profile = rider.profile.copyWith(documents: docs);
@@ -327,10 +382,17 @@ class AppState extends ChangeNotifier {
     required DocumentType type,
     required File file,
   }) async {
-    final doc = switch (type) { DocumentType.idProof => 'aadhar', DocumentType.drivingLicense => 'license', DocumentType.vehicleRc => 'rc' };
+    final doc = switch (type) {
+      DocumentType.idProof => 'aadhar',
+      DocumentType.drivingLicense => 'license',
+      DocumentType.vehicleRc => 'rc',
+    };
     try {
       await ApiClient().uploadRiderDocument(doc: doc, file: file);
-      final docs = rider.profile.documents.copyWithStatus(type, DocumentStatus.pending);
+      final docs = rider.profile.documents.copyWithStatus(
+        type,
+        DocumentStatus.pending,
+      );
       rider.profile = rider.profile.copyWith(documents: docs);
       notifyListeners();
     } catch (_) {}
@@ -392,10 +454,7 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> refreshOrders() async {
-    await Future.wait([
-      fetchAvailableOrders(),
-      _loadMyOrders(),
-    ]);
+    await Future.wait([fetchAvailableOrders(), _loadMyOrders()]);
   }
 
   Future<void> refreshEarnings() async {
@@ -410,15 +469,27 @@ class AppState extends ChangeNotifier {
       final v = data['vehicle'] as Map<String, dynamic>;
       final b = data['bank'] as Map<String, dynamic>;
       final d = data['documents'] as Map<String, dynamic>;
-      final vt = switch ((v['type'] ?? 'unknown').toString()) { 'bike' => VehicleType.bike, 'scooter' => VehicleType.scooter, 'cycle' => VehicleType.cycle, _ => VehicleType.unknown };
+      final vt = switch ((v['type'] ?? 'unknown').toString()) {
+        'bike' => VehicleType.bike,
+        'scooter' => VehicleType.scooter,
+        'cycle' => VehicleType.cycle,
+        _ => VehicleType.unknown,
+      };
       final approval = (data['approval_status'] ?? '').toString();
       rider.profile = RiderProfile(
         name: g['name']?.toString() ?? '',
         email: g['email']?.toString() ?? '',
         address: g['address']?.toString() ?? '',
         city: g['city']?.toString() ?? '',
-        vehicle: VehicleDetails(type: vt, number: v['number']?.toString() ?? ''),
-        bank: BankDetails(holderName: b['account_name']?.toString() ?? '', accountNumber: b['account_number']?.toString() ?? '', ifsc: b['ifsc']?.toString() ?? ''),
+        vehicle: VehicleDetails(
+          type: vt,
+          number: v['number']?.toString() ?? '',
+        ),
+        bank: BankDetails(
+          holderName: b['account_name']?.toString() ?? '',
+          accountNumber: b['account_number']?.toString() ?? '',
+          ifsc: b['ifsc']?.toString() ?? '',
+        ),
         documents: DocumentsState(
           idProof: _docStatus(d['aadhar']?.toString()),
           drivingLicense: _docStatus(d['license']?.toString()),
@@ -451,18 +522,22 @@ class AppState extends ChangeNotifier {
       for (final t in list) {
         final amount = (t['amount'] as num?)?.toDouble() ?? 0.0;
         final cash = (t['cash_collected'] as num?)?.toInt() ?? 0;
-        final created = DateTime.tryParse(t['created_at']?.toString() ?? '') ?? DateTime.now();
-        earnings.addTrip(TripEarning(
-          orderId: 0,
-          createdAt: created,
-          baseFare: amount,
-          distanceFare: 0,
-          surge: 0,
-          tips: 0,
-          incentive: 0,
-          isCod: cash > 0,
-          cashCollected: cash,
-        ));
+        final created =
+            DateTime.tryParse(t['created_at']?.toString() ?? '') ??
+            DateTime.now();
+        earnings.addTrip(
+          TripEarning(
+            orderId: 0,
+            createdAt: created,
+            baseFare: amount,
+            distanceFare: 0,
+            surge: 0,
+            tips: 0,
+            incentive: 0,
+            isCod: cash > 0,
+            cashCollected: cash,
+          ),
+        );
       }
       notifyListeners();
     } catch (_) {}
@@ -476,17 +551,27 @@ class AppState extends ChangeNotifier {
       for (final o in list) {
         final rid = _idSeq++;
         _backendOrderId[rid] = o['id'].toString();
-        final status = (o['status']?.toString() ?? '').toUpperCase() == 'DELIVERED' ? OrderStatus.delivered : OrderStatus.accepted;
-        orders.history.add(OrderHistoryItem(
-          orderId: rid,
-          restaurantName: o['restaurant']?.toString() ?? '',
-          dropArea: '',
-          status: status,
-          completedAt: DateTime.tryParse(o['created_at']?.toString() ?? '') ?? DateTime.now(),
-          earning: (o['amount'] as num?)?.toDouble() ?? 0.0,
-          cashCollected: o['payment_method']?.toString().toUpperCase() == 'CASH' ? (o['amount'] as num?)?.toInt() ?? 0 : 0,
-          note: '',
-        ));
+        final status =
+            (o['status']?.toString() ?? '').toUpperCase() == 'DELIVERED'
+            ? OrderStatus.delivered
+            : OrderStatus.accepted;
+        orders.history.add(
+          OrderHistoryItem(
+            orderId: rid,
+            restaurantName: o['restaurant']?.toString() ?? '',
+            dropArea: '',
+            status: status,
+            completedAt:
+                DateTime.tryParse(o['created_at']?.toString() ?? '') ??
+                DateTime.now(),
+            earning: (o['amount'] as num?)?.toDouble() ?? 0.0,
+            cashCollected:
+                o['payment_method']?.toString().toUpperCase() == 'CASH'
+                ? (o['amount'] as num?)?.toInt() ?? 0
+                : 0,
+            note: '',
+          ),
+        );
       }
       notifyListeners();
     } catch (_) {}
@@ -522,7 +607,8 @@ class AppState extends ChangeNotifier {
     return raw.map((e) {
       final m = e is Map ? e.cast<String, dynamic>() : <String, dynamic>{};
       final name = m['name']?.toString() ?? m['title']?.toString() ?? 'Item';
-      final qty = (m['quantity'] as num?)?.toInt() ?? (m['qty'] as num?)?.toInt() ?? 1;
+      final qty =
+          (m['quantity'] as num?)?.toInt() ?? (m['qty'] as num?)?.toInt() ?? 1;
       return OrderItem(name: name, quantity: qty);
     }).toList();
   }
@@ -542,7 +628,11 @@ class AppState extends ChangeNotifier {
       final line1 = m['address_line1']?.toString() ?? '';
       final line2 = m['address_line2']?.toString() ?? '';
       final city = m['city']?.toString() ?? '';
-      final parts = [line1, line2, city].where((e) => e.trim().isNotEmpty).toList();
+      final parts = [
+        line1,
+        line2,
+        city,
+      ].where((e) => e.trim().isNotEmpty).toList();
       return parts.isEmpty ? '' : parts.join(', ');
     }
     return '';
@@ -721,7 +811,8 @@ class VehicleDetails {
   final VehicleType type;
   final String number;
 
-  bool get isComplete => type != VehicleType.unknown && number.trim().isNotEmpty;
+  bool get isComplete =>
+      type != VehicleType.unknown && number.trim().isNotEmpty;
 
   VehicleDetails copyWith({VehicleType? type, String? number}) {
     return VehicleDetails(

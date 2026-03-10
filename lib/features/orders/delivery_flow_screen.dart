@@ -41,11 +41,14 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
 
   Future<void> _openMaps(ActiveOrder order) async {
     final dest = Uri.encodeComponent(
-      order.progress == DeliveryProgress.navigateRestaurant || order.progress == DeliveryProgress.reachedRestaurant
+      order.progress == DeliveryProgress.navigateRestaurant ||
+              order.progress == DeliveryProgress.reachedRestaurant
           ? order.request.restaurantName
           : order.request.dropArea,
     );
-    final uri = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$dest');
+    final uri = Uri.parse(
+      'https://www.google.com/maps/dir/?api=1&destination=$dest',
+    );
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
@@ -149,7 +152,8 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
   Widget build(BuildContext context) {
     final state = AppStateScope.of(context);
     final order = state.orders.findActive(widget.orderId);
-    if (order == null) return const Scaffold(body: Center(child: Text('Order not found')));
+    if (order == null)
+      return const Scaffold(body: Center(child: Text('Order not found')));
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -163,15 +167,22 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.map_outlined, size: 64, color: Colors.blue.withOpacity(0.2)),
+                    Icon(
+                      Icons.map_outlined,
+                      size: 64,
+                      color: Colors.blue.withOpacity(0.2),
+                    ),
                     const SizedBox(height: 16),
-                    const Text('Pickup Location Map', style: TextStyle(color: Color(0xFF94A3B8))),
+                    const Text(
+                      'Pickup Location Map',
+                      style: TextStyle(color: Color(0xFF94A3B8)),
+                    ),
                   ],
                 ),
               ),
             ),
           ),
-          
+
           // Top Navigation Overlay
           Positioned(
             top: 50,
@@ -187,14 +198,21 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
                       color: Colors.white,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.arrow_back, color: Color(0xFF1E293B), size: 24),
+                    child: const Icon(
+                      Icons.arrow_back,
+                      color: Color(0xFF1E293B),
+                      size: 24,
+                    ),
                   ),
                 ),
                 const Spacer(),
                 GestureDetector(
                   onTap: () => _openMaps(order),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(30),
@@ -212,12 +230,15 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
                         SizedBox(width: 8),
                         Text(
                           'Navigate',
-                          style: TextStyle(fontWeight: FontWeight.w800, color: Color(0xFF1E293B)),
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            color: Color(0xFF1E293B),
+                          ),
                         ),
                       ],
                     ),
                   ),
-                )
+                ),
               ],
             ),
           ),
@@ -271,7 +292,11 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
                                         ),
                                       ),
                                       const SizedBox(width: 8),
-                                      const Icon(Icons.verified, color: Color(0xFF00E676), size: 18),
+                                      const Icon(
+                                        Icons.verified,
+                                        color: Color(0xFF00E676),
+                                        size: 18,
+                                      ),
                                     ],
                                   ),
                                   const SizedBox(height: 4),
@@ -288,9 +313,17 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
                             ),
                             Row(
                               children: [
-                                _RoundAction(icon: Icons.call, color: Colors.white.withOpacity(0.1), iconColor: Colors.white),
+                                _RoundAction(
+                                  icon: Icons.call,
+                                  color: Colors.white.withOpacity(0.1),
+                                  iconColor: Colors.white,
+                                ),
                                 const SizedBox(width: 12),
-                                _RoundAction(icon: Icons.chat_bubble, color: Colors.white.withOpacity(0.1), iconColor: Colors.white),
+                                _RoundAction(
+                                  icon: Icons.chat_bubble,
+                                  color: Colors.white.withOpacity(0.1),
+                                  iconColor: Colors.white,
+                                ),
                               ],
                             ),
                           ],
@@ -307,7 +340,10 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
                         ),
                         const SizedBox(height: 16),
                         if (order.request.items.isEmpty)
-                          const _PickupItem(name: 'Items will appear here', quantity: '—')
+                          const _PickupItem(
+                            name: 'Items will appear here',
+                            quantity: '—',
+                          )
                         else
                           ...order.request.items.map(
                             (it) => _PickupItem(
@@ -321,11 +357,17 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
                           decoration: BoxDecoration(
                             color: const Color(0xFFFEF3C7).withOpacity(0.1),
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.2)),
+                            border: Border.all(
+                              color: const Color(0xFFF59E0B).withOpacity(0.2),
+                            ),
                           ),
                           child: Row(
                             children: [
-                              const Icon(Icons.warning_amber_rounded, color: Color(0xFFF59E0B), size: 20),
+                              const Icon(
+                                Icons.warning_amber_rounded,
+                                color: Color(0xFFF59E0B),
+                                size: 20,
+                              ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Text(
@@ -348,11 +390,15 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
                                   width: double.infinity,
                                   height: 60,
                                   child: ElevatedButton(
-                                    onPressed: _loading ? null : () async {
-                                      await state.markReachedRestaurant(order.id);
-                                      if (!mounted) return;
-                                      setState(() {});
-                                    },
+                                    onPressed: _loading
+                                        ? null
+                                        : () async {
+                                            await state.markReachedRestaurant(
+                                              order.id,
+                                            );
+                                            if (!mounted) return;
+                                            setState(() {});
+                                          },
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: const Color(0xFFEF4444),
                                       foregroundColor: Colors.white,
@@ -376,7 +422,10 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
                                   children: [
                                     const Text(
                                       'Enter Pickup OTP',
-                                      style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w700),
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                     ),
                                     const SizedBox(height: 10),
                                     TextField(
@@ -394,17 +443,31 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
                                       width: double.infinity,
                                       height: 56,
                                       child: ElevatedButton(
-                                        onPressed: _loading ? null : () async {
-                                          await _run(() async {
-                                            final ok = await state.confirmPickupOtp(order.id, _pickupOtpController.text.trim());
-                                            if (ok) setState(() {});
-                                            return ok;
-                                          }, error: 'Invalid OTP');
-                                        },
+                                        onPressed: _loading
+                                            ? null
+                                            : () async {
+                                                await _run(() async {
+                                                  final ok = await state
+                                                      .confirmPickupOtp(
+                                                        order.id,
+                                                        _pickupOtpController
+                                                            .text
+                                                            .trim(),
+                                                      );
+                                                  if (ok) setState(() {});
+                                                  return ok;
+                                                }, error: 'Invalid OTP');
+                                              },
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFFEF4444),
+                                          backgroundColor: const Color(
+                                            0xFFEF4444,
+                                          ),
                                           foregroundColor: Colors.white,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                          ),
                                         ),
                                         child: const Text('Confirm Pickup'),
                                       ),
@@ -416,11 +479,15 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
                                   width: double.infinity,
                                   height: 60,
                                   child: ElevatedButton(
-                                    onPressed: _loading ? null : () async {
-                                      await state.markArrivedCustomer(order.id);
-                                      if (!mounted) return;
-                                      setState(() {});
-                                    },
+                                    onPressed: _loading
+                                        ? null
+                                        : () async {
+                                            await state.markArrivedCustomer(
+                                              order.id,
+                                            );
+                                            if (!mounted) return;
+                                            setState(() {});
+                                          },
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: const Color(0xFFEF4444),
                                       foregroundColor: Colors.white,
@@ -444,7 +511,10 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
                                   children: [
                                     const Text(
                                       'Enter Delivery OTP',
-                                      style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w700),
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontWeight: FontWeight.w700,
+                                      ),
                                     ),
                                     const SizedBox(height: 10),
                                     TextField(
@@ -462,17 +532,32 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
                                       width: double.infinity,
                                       height: 56,
                                       child: ElevatedButton(
-                                        onPressed: _loading ? null : () async {
-                                          await _run(() async {
-                                            final ok = await state.confirmDeliveryOtp(order.id, _deliveryOtpController.text.trim());
-                                            if (ok && mounted) Navigator.of(context).pop();
-                                            return ok;
-                                          }, error: 'Invalid OTP');
-                                        },
+                                        onPressed: _loading
+                                            ? null
+                                            : () async {
+                                                await _run(() async {
+                                                  final ok = await state
+                                                      .confirmDeliveryOtp(
+                                                        order.id,
+                                                        _deliveryOtpController
+                                                            .text
+                                                            .trim(),
+                                                      );
+                                                  if (ok && mounted)
+                                                    Navigator.of(context).pop();
+                                                  return ok;
+                                                }, error: 'Invalid OTP');
+                                              },
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFFEF4444),
+                                          backgroundColor: const Color(
+                                            0xFFEF4444,
+                                          ),
                                           foregroundColor: Colors.white,
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              16,
+                                            ),
+                                          ),
                                         ),
                                         child: const Text('Confirm Delivery'),
                                       ),
@@ -484,7 +569,8 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
                                 return SizedBox(
                                   width: double.infinity,
                                   child: OutlinedButton(
-                                    onPressed: () => Navigator.of(context).pop(),
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(),
                                     child: const Text('Close'),
                                   ),
                                 );
@@ -506,7 +592,11 @@ class _DeliveryFlowScreenState extends State<DeliveryFlowScreen> {
 }
 
 class _RoundAction extends StatelessWidget {
-  const _RoundAction({required this.icon, required this.color, required this.iconColor});
+  const _RoundAction({
+    required this.icon,
+    required this.color,
+    required this.iconColor,
+  });
   final IconData icon;
   final Color color;
   final Color iconColor;
@@ -516,19 +606,18 @@ class _RoundAction extends StatelessWidget {
     return Container(
       width: 44,
       height: 44,
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-      ),
-      child: Center(
-        child: Icon(icon, color: iconColor, size: 20),
-      ),
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      child: Center(child: Icon(icon, color: iconColor, size: 20)),
     );
   }
 }
 
 class _PickupItem extends StatefulWidget {
-  const _PickupItem({required this.name, required this.quantity, this.crossed = false});
+  const _PickupItem({
+    required this.name,
+    required this.quantity,
+    this.crossed = false,
+  });
   final String name;
   final String quantity;
   final bool crossed;
@@ -555,12 +644,14 @@ class _PickupItemState extends State<_PickupItem> {
                 color: _checked ? const Color(0xFF00E676) : Colors.transparent,
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(
-                  color: _checked ? const Color(0xFF00E676) : Colors.white.withOpacity(0.2),
+                  color: _checked
+                      ? const Color(0xFF00E676)
+                      : Colors.white.withOpacity(0.2),
                   width: 2,
                 ),
               ),
-              child: _checked 
-                  ? const Icon(Icons.check, size: 16, color: Colors.black) 
+              child: _checked
+                  ? const Icon(Icons.check, size: 16, color: Colors.black)
                   : null,
             ),
             const SizedBox(width: 16),
@@ -568,7 +659,9 @@ class _PickupItemState extends State<_PickupItem> {
               child: Text(
                 '${widget.quantity} x ${widget.name}',
                 style: TextStyle(
-                  color: _checked ? Colors.white.withOpacity(0.3) : Colors.white,
+                  color: _checked
+                      ? Colors.white.withOpacity(0.3)
+                      : Colors.white,
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
                   decoration: _checked ? TextDecoration.lineThrough : null,
@@ -626,7 +719,10 @@ class _SlideToCompleteState extends State<_SlideToComplete> {
                 child: GestureDetector(
                   onHorizontalDragUpdate: (details) {
                     setState(() {
-                      _position = (_position + details.delta.dx).clamp(0, maxPosition);
+                      _position = (_position + details.delta.dx).clamp(
+                        0,
+                        maxPosition,
+                      );
                     });
                   },
                   onHorizontalDragEnd: (details) {
@@ -652,7 +748,11 @@ class _SlideToCompleteState extends State<_SlideToComplete> {
                         ),
                       ],
                     ),
-                    child: const Icon(Icons.chevron_right, color: Colors.white, size: 28),
+                    child: const Icon(
+                      Icons.chevron_right,
+                      color: Colors.white,
+                      size: 28,
+                    ),
                   ),
                 ),
               ),

@@ -88,26 +88,26 @@ class _OnboardingScaffold extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: !showHeader 
-        ? null 
-        : AppBar(
-            backgroundColor: bg,
-            elevation: 0,
-            leading: IconButton(
-              onPressed: onBack,
-              icon: Icon(Icons.arrow_back, color: text),
-            ),
-            title: Text(
-              'MAA SHARDA GO',
-              style: TextStyle(
-                fontWeight: FontWeight.w900,
-                fontSize: 16,
-                color: text,
-                letterSpacing: 1.2,
+      appBar: !showHeader
+          ? null
+          : AppBar(
+              backgroundColor: bg,
+              elevation: 0,
+              leading: IconButton(
+                onPressed: onBack,
+                icon: Icon(Icons.arrow_back, color: text),
               ),
+              title: Text(
+                'MAA SHARDA GO',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
+                  color: text,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              centerTitle: true,
             ),
-            centerTitle: true,
-          ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -126,7 +126,9 @@ class _OnboardingScaffold extends StatelessWidget {
                         height: 6,
                         margin: const EdgeInsets.symmetric(horizontal: 4),
                         decoration: BoxDecoration(
-                          color: isActive ? const Color(0xFF00E676) : text.withOpacity(0.2),
+                          color: isActive
+                              ? const Color(0xFF00E676)
+                              : text.withOpacity(0.2),
                           borderRadius: BorderRadius.circular(3),
                         ),
                       );
@@ -139,71 +141,70 @@ class _OnboardingScaffold extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 subtitle,
-                style: TextStyle(
-                  color: sub,
-                  fontSize: 16,
-                  height: 1.5,
-                ),
+                style: TextStyle(color: sub, fontSize: 16, height: 1.5),
               ),
               const SizedBox(height: 24),
               Expanded(child: child),
-              if (footer != null) footer! else Padding(
-                padding: const EdgeInsets.only(bottom: 24, top: 16),
-                child: Row(
-                  children: [
-                    if (secondaryLabel != null) ...[
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: onSecondary,
-                          style: OutlinedButton.styleFrom(
-                            minimumSize: const Size.fromHeight(60),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
+              if (footer != null)
+                footer!
+              else
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 24, top: 16),
+                  child: Row(
+                    children: [
+                      if (secondaryLabel != null) ...[
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed: onSecondary,
+                            style: OutlinedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(60),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
                             ),
-                          ),
-                          child: Text(
-                            secondaryLabel!,
-                            style: const TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                    ],
-                    Expanded(
-                      flex: 2,
-                      child: ElevatedButton(
-                        onPressed: primaryEnabled ? onPrimary : null,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF00E676),
-                          foregroundColor: Colors.white,
-                          elevation: 0,
-                          minimumSize: const Size.fromHeight(60),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Text(
-                              primaryLabel,
+                            child: Text(
+                              secondaryLabel!,
                               style: const TextStyle(
                                 fontSize: 18,
                                 fontWeight: FontWeight.w900,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            const Icon(Icons.arrow_forward),
-                          ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                      ],
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          onPressed: primaryEnabled ? onPrimary : null,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00E676),
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            minimumSize: const Size.fromHeight(60),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                primaryLabel,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Icon(Icons.arrow_forward),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -283,7 +284,10 @@ class _PersonalStepState extends State<_PersonalStep> {
                           return ListTile(
                             title: Text(c),
                             trailing: _city == c
-                                ? const Icon(Icons.check, color: Color(0xFF00E676))
+                                ? const Icon(
+                                    Icons.check,
+                                    color: Color(0xFF00E676),
+                                  )
                                 : null,
                             onTap: () => Navigator.of(context).pop(c),
                           );
@@ -302,7 +306,9 @@ class _PersonalStepState extends State<_PersonalStep> {
     setState(() => _city = picked);
     // Persist early so back/forward keeps value even if user exits onboarding.
     await state.updateGeneralInfo(
-      name: _nameController.text.trim().isEmpty ? state.rider.profile.name : _nameController.text.trim(),
+      name: _nameController.text.trim().isEmpty
+          ? state.rider.profile.name
+          : _nameController.text.trim(),
       city: picked,
     );
   }
@@ -341,7 +347,8 @@ class _PersonalStepState extends State<_PersonalStep> {
       ),
       subtitle: 'Join our community of drivers and start earning today.',
       primaryLabel: 'Next',
-      primaryEnabled: _nameController.text.trim().isNotEmpty && _city.trim().isNotEmpty,
+      primaryEnabled:
+          _nameController.text.trim().isNotEmpty && _city.trim().isNotEmpty,
       onPrimary: () {
         state.updateGeneralInfo(
           name: _nameController.text.trim(),
@@ -424,7 +431,11 @@ class _PersonalStepState extends State<_PersonalStep> {
               SizedBox(width: 6),
               Text(
                 'Verified',
-                style: TextStyle(color: Color(0xFF00E676), fontSize: 13, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  color: Color(0xFF00E676),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
           ),
@@ -445,8 +456,14 @@ class _PersonalStepState extends State<_PersonalStep> {
                 readOnly: true,
                 decoration: InputDecoration(
                   hintText: _city.isEmpty ? 'Search your city' : _city,
-                  prefixIcon: const Icon(Icons.location_on_outlined, color: Color(0xFF94A3B8)),
-                  suffixIcon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF94A3B8)),
+                  prefixIcon: const Icon(
+                    Icons.location_on_outlined,
+                    color: Color(0xFF94A3B8),
+                  ),
+                  suffixIcon: const Icon(
+                    Icons.keyboard_arrow_down,
+                    color: Color(0xFF94A3B8),
+                  ),
                 ),
               ),
             ),
@@ -504,7 +521,11 @@ class _VehicleStepState extends State<_VehicleStep> {
       subtitle: 'Tell us what you drive to get started.',
       primaryLabel: 'Next Step',
       onPrimary: () {
-        state.updateVehicle(type: _type, number: reg, drivingLicenseNumber: lic);
+        state.updateVehicle(
+          type: _type,
+          number: reg,
+          drivingLicenseNumber: lic,
+        );
         widget.onNext();
       },
       footer: Padding(
@@ -551,7 +572,10 @@ class _VehicleStepState extends State<_VehicleStep> {
                   children: const [
                     Text(
                       'Next Step',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                     SizedBox(width: 8),
                     Icon(Icons.arrow_forward, size: 20),
@@ -647,11 +671,17 @@ class _VehicleStepState extends State<_VehicleStep> {
             decoration: BoxDecoration(
               color: const Color(0xFF00E676).withOpacity(0.08),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFF00E676).withOpacity(0.15)),
+              border: Border.all(
+                color: const Color(0xFF00E676).withOpacity(0.15),
+              ),
             ),
             child: Row(
               children: [
-                const Icon(Icons.info_outline, color: Color(0xFF00E676), size: 20),
+                const Icon(
+                  Icons.info_outline,
+                  color: Color(0xFF00E676),
+                  size: 20,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
@@ -695,7 +725,9 @@ class _VehicleTypeCard extends StatelessWidget {
           color: selected ? Colors.transparent : Colors.white.withOpacity(0.05),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected ? const Color(0xFF00E676) : Colors.white.withOpacity(0.05),
+            color: selected
+                ? const Color(0xFF00E676)
+                : Colors.white.withOpacity(0.05),
             width: 2,
           ),
         ),
@@ -817,7 +849,15 @@ class _BankStepState extends State<_BankStep> {
     return _OnboardingScaffold(
       currentStep: 3,
       totalSteps: 4,
-      title: const Text('Bank details', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: Color(0xFF0F172A), height: 1.1)),
+      title: const Text(
+        'Bank details',
+        style: TextStyle(
+          fontSize: 32,
+          fontWeight: FontWeight.w900,
+          color: Color(0xFF0F172A),
+          height: 1.1,
+        ),
+      ),
       subtitle: 'Payments will be deposited to this account.',
       secondaryLabel: 'Back',
       onSecondary: widget.onBack,
@@ -880,7 +920,10 @@ class _BankStepState extends State<_BankStep> {
                 children: [
                   const CircleAvatar(
                     backgroundColor: AppColors.background,
-                    child: Icon(Icons.security_outlined, color: AppColors.primary),
+                    child: Icon(
+                      Icons.security_outlined,
+                      color: AppColors.primary,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -913,7 +956,8 @@ class _DocumentsStepState extends State<_DocumentsStep> {
   bool _uploading = false;
   final Map<DocumentType, DocumentStatus> _localStatuses = {};
 
-  bool _isComplete(AppState state) => state.rider.profile.documents.mandatoryComplete;
+  bool _isComplete(AppState state) =>
+      state.rider.profile.documents.mandatoryComplete;
 
   DocumentStatus _statusFor(DocumentType type, DocumentsState docs) {
     return _localStatuses[type] ??
@@ -925,10 +969,10 @@ class _DocumentsStepState extends State<_DocumentsStep> {
   }
 
   static String _docKey(DocumentType type) => switch (type) {
-        DocumentType.idProof => 'aadhar',
-        DocumentType.drivingLicense => 'license',
-        DocumentType.vehicleRc => 'rc',
-      };
+    DocumentType.idProof => 'aadhar',
+    DocumentType.drivingLicense => 'license',
+    DocumentType.vehicleRc => 'rc',
+  };
 
   Future<File?> _pickFile() async {
     final res = await FilePicker.platform.pickFiles(
@@ -943,7 +987,10 @@ class _DocumentsStepState extends State<_DocumentsStep> {
 
   Future<File?> _pickFromCamera() async {
     final picker = ImagePicker();
-    final x = await picker.pickImage(source: ImageSource.camera, imageQuality: 85);
+    final x = await picker.pickImage(
+      source: ImageSource.camera,
+      imageQuality: 85,
+    );
     if (x == null) return null;
     return File(x.path);
   }
@@ -975,7 +1022,9 @@ class _DocumentsStepState extends State<_DocumentsStep> {
     if (src == null) return;
     setState(() => _uploading = true);
     try {
-      final file = src == 'camera' ? await _pickFromCamera() : await _pickFile();
+      final file = src == 'camera'
+          ? await _pickFromCamera()
+          : await _pickFile();
       if (!mounted) return;
       if (file == null) {
         setState(() => _uploading = false);
@@ -986,7 +1035,9 @@ class _DocumentsStepState extends State<_DocumentsStep> {
       if (!mounted) return;
       setState(() => _localStatuses[type] = DocumentStatus.pending);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Uploaded ${_docKey(type)}. Pending verification.')),
+        SnackBar(
+          content: Text('Uploaded ${_docKey(type)}. Pending verification.'),
+        ),
       );
     } catch (_) {
       if (!mounted) return;
@@ -1005,13 +1056,22 @@ class _DocumentsStepState extends State<_DocumentsStep> {
     final idStatus = _statusFor(DocumentType.idProof, docs);
     final licStatus = _statusFor(DocumentType.drivingLicense, docs);
     final rcStatus = _statusFor(DocumentType.vehicleRc, docs);
-    final allUploaded = idStatus != DocumentStatus.missing &&
+    final allUploaded =
+        idStatus != DocumentStatus.missing &&
         licStatus != DocumentStatus.missing &&
         rcStatus != DocumentStatus.missing;
     return _OnboardingScaffold(
       currentStep: 4,
       totalSteps: 4,
-      title: const Text('Documents', style: TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: Color(0xFF0F172A), height: 1.1)),
+      title: const Text(
+        'Documents',
+        style: TextStyle(
+          fontSize: 32,
+          fontWeight: FontWeight.w900,
+          color: Color(0xFF0F172A),
+          height: 1.1,
+        ),
+      ),
       subtitle: 'Upload required documents to start receiving orders.',
       secondaryLabel: 'Back',
       onSecondary: widget.onBack,
@@ -1111,7 +1171,6 @@ class _DocumentsStepState extends State<_DocumentsStep> {
   }
 }
 
-
 class ApplicationReviewScreen extends StatelessWidget {
   const ApplicationReviewScreen({super.key});
 
@@ -1148,7 +1207,8 @@ class ApplicationReviewScreen extends StatelessWidget {
                     state.rider.verification == VerificationStatus.rejected
                         ? Icons.cancel
                         : Icons.check_circle,
-                    color: state.rider.verification == VerificationStatus.rejected
+                    color:
+                        state.rider.verification == VerificationStatus.rejected
                         ? const Color(0xFFEF4444)
                         : const Color(0xFF00E676),
                     size: 60,
@@ -1232,12 +1292,15 @@ class ApplicationReviewScreen extends StatelessWidget {
                       title: 'Document Verification',
                       subtitle: 'Checking Aadhar & License details.',
                       isDone: state.rider.profile.documents.mandatoryComplete,
-                      isActive: !state.rider.profile.documents.mandatoryComplete,
+                      isActive:
+                          !state.rider.profile.documents.mandatoryComplete,
                     ),
                     _TimelineItem(
                       title: 'Approval',
                       subtitle: 'Final activation for driving.',
-                      isDone: state.rider.verification == VerificationStatus.verified,
+                      isDone:
+                          state.rider.verification ==
+                          VerificationStatus.verified,
                       isLast: true,
                     ),
                   ],
@@ -1292,7 +1355,8 @@ class ApplicationReviewScreen extends StatelessWidget {
                       await state.login(phone: state.rider.session.phone);
                     } catch (_) {}
                     if (!context.mounted) return;
-                    if (state.rider.verification == VerificationStatus.verified) {
+                    if (state.rider.verification ==
+                        VerificationStatus.verified) {
                       Navigator.of(context).pushReplacementNamed('/home');
                     } else {
                       ScaffoldMessenger.of(context).showSnackBar(
@@ -1368,27 +1432,22 @@ class _TimelineItem extends StatelessWidget {
                 width: 24,
                 height: 24,
                 decoration: BoxDecoration(
-                  color: isDone 
-                      ? const Color(0xFF00E676) 
-                      : Colors.white,
+                  color: isDone ? const Color(0xFF00E676) : Colors.white,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: isDone || isActive 
-                        ? const Color(0xFF00E676) 
+                    color: isDone || isActive
+                        ? const Color(0xFF00E676)
                         : const Color(0xFFCBD5E1),
                     width: isActive ? 6 : 2,
                   ),
                 ),
-                child: isDone 
-                    ? const Icon(Icons.check, color: Colors.white, size: 14) 
+                child: isDone
+                    ? const Icon(Icons.check, color: Colors.white, size: 14)
                     : null,
               ),
               if (!isLast)
                 Expanded(
-                  child: Container(
-                    width: 2,
-                    color: const Color(0xFFE2E8F0),
-                  ),
+                  child: Container(width: 2, color: const Color(0xFFE2E8F0)),
                 ),
             ],
           ),
@@ -1404,8 +1463,8 @@ class _TimelineItem extends StatelessWidget {
                     style: TextStyle(
                       fontWeight: FontWeight.w800,
                       fontSize: 16,
-                      color: isDone || isActive 
-                          ? const Color(0xFF1E293B) 
+                      color: isDone || isActive
+                          ? const Color(0xFF1E293B)
                           : const Color(0xFF94A3B8),
                     ),
                   ),

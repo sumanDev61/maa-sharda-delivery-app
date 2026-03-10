@@ -52,9 +52,7 @@ class ApiClient {
 
   Map<String, String> _getUploadHeaders() {
     // Do not set Content-Type here; MultipartRequest will set it with boundary.
-    final headers = <String, String>{
-      'Accept': 'application/json',
-    };
+    final headers = <String, String>{'Accept': 'application/json'};
     if (_riderId != null) {
       headers['x-rider-id'] = _riderId!;
     }
@@ -69,7 +67,10 @@ class ApiClient {
     return http.get(uri, headers: _getHeaders());
   }
 
-  Future<http.Response> post(String endpoint, {Map<String, dynamic>? body}) async {
+  Future<http.Response> post(
+    String endpoint, {
+    Map<String, dynamic>? body,
+  }) async {
     final uri = Uri.parse('$baseUrl$endpoint');
     return http.post(
       uri,
@@ -78,7 +79,10 @@ class ApiClient {
     );
   }
 
-  Future<http.Response> put(String endpoint, {Map<String, dynamic>? body}) async {
+  Future<http.Response> put(
+    String endpoint, {
+    Map<String, dynamic>? body,
+  }) async {
     final uri = Uri.parse('$baseUrl$endpoint');
     return http.put(
       uri,
@@ -103,7 +107,9 @@ class ApiClient {
     req.files.add(await http.MultipartFile.fromPath('image', file.path));
     final streamed = await req.send();
     final body = await streamed.stream.bytesToString();
-    final json = body.isNotEmpty ? (jsonDecode(body) as Map<String, dynamic>) : <String, dynamic>{};
+    final json = body.isNotEmpty
+        ? (jsonDecode(body) as Map<String, dynamic>)
+        : <String, dynamic>{};
     if (streamed.statusCode < 200 || streamed.statusCode >= 300) {
       throw Exception(json['error']?.toString() ?? 'upload failed');
     }

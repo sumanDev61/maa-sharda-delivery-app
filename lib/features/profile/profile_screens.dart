@@ -34,8 +34,12 @@ class _GeneralInfoScreenState extends State<GeneralInfoScreen> {
     final state = AppStateScope.of(context);
     await state.updateGeneralInfo(
       name: _nameController.text.trim(),
-      email: _emailController.text.trim().isEmpty ? null : _emailController.text.trim(),
-      address: _addressController.text.trim().isEmpty ? null : _addressController.text.trim(),
+      email: _emailController.text.trim().isEmpty
+          ? null
+          : _emailController.text.trim(),
+      address: _addressController.text.trim().isEmpty
+          ? null
+          : _addressController.text.trim(),
     );
     if (!mounted) return;
     setState(() => _saving = false);
@@ -157,8 +161,15 @@ class DocumentsScreen extends StatelessWidget {
             decoration: const InputDecoration(hintText: 'https://...'),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
-            TextButton(onPressed: () => Navigator.of(context).pop(controller.text.trim()), child: const Text('Submit')),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () =>
+                  Navigator.of(context).pop(controller.text.trim()),
+              child: const Text('Submit'),
+            ),
           ],
         );
       },
@@ -209,16 +220,25 @@ class DocumentsScreen extends StatelessWidget {
                   title: 'Add image URL',
                   onTap: () async {
                     Navigator.of(context).pop();
-                    final url = await _promptForUrl(context, 'Paste $docName image URL');
+                    final url = await _promptForUrl(
+                      context,
+                      'Paste $docName image URL',
+                    );
                     if (url == null || url.trim().isEmpty) return;
                     final docKey = _docKey(docName);
-                    await ApiClient().post('/v1/delivery/profile/documents', body: {
-                      'doc': docKey,
-                      'status': 'pending',
-                      'url': url.trim(),
-                    });
+                    await ApiClient().post(
+                      '/v1/delivery/profile/documents',
+                      body: {
+                        'doc': docKey,
+                        'status': 'pending',
+                        'url': url.trim(),
+                      },
+                    );
                     final state = AppStateScope.of(context);
-                    await state.setDocumentStatus(_docType(docKey), DocumentStatus.pending);
+                    await state.setDocumentStatus(
+                      _docType(docKey),
+                      DocumentStatus.pending,
+                    );
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Document submitted')),
@@ -232,12 +252,15 @@ class DocumentsScreen extends StatelessWidget {
                   onTap: () async {
                     Navigator.of(context).pop();
                     final docKey = _docKey(docName);
-                    await ApiClient().post('/v1/delivery/profile/documents', body: {
-                      'doc': docKey,
-                      'status': 'verified',
-                    });
+                    await ApiClient().post(
+                      '/v1/delivery/profile/documents',
+                      body: {'doc': docKey, 'status': 'verified'},
+                    );
                     final state = AppStateScope.of(context);
-                    await state.setDocumentStatus(_docType(docKey), DocumentStatus.verified);
+                    await state.setDocumentStatus(
+                      _docType(docKey),
+                      DocumentStatus.verified,
+                    );
                     if (!context.mounted) return;
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Document marked verified')),
@@ -305,7 +328,9 @@ class DocumentsScreen extends StatelessWidget {
                       height: 4,
                       margin: EdgeInsets.only(right: index == 2 ? 0 : 8),
                       decoration: BoxDecoration(
-                        color: isActive ? const Color(0xFF00E676) : const Color(0xFFF1F5F9),
+                        color: isActive
+                            ? const Color(0xFF00E676)
+                            : const Color(0xFFF1F5F9),
                         borderRadius: BorderRadius.circular(2),
                       ),
                     ),
@@ -353,7 +378,9 @@ class DocumentsScreen extends StatelessWidget {
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: const Color(0xFFE2E8F0)),
+                                border: Border.all(
+                                  color: const Color(0xFFE2E8F0),
+                                ),
                               ),
                               child: Icon(d.icon, color: d.color, size: 24),
                             ),
@@ -465,9 +492,9 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
     );
     if (!mounted) return;
     setState(() => _saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Vehicle details saved')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Vehicle details saved')));
   }
 
   @override
@@ -480,7 +507,8 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
       if (_licenseController.text.isEmpty) {
         _licenseController.text = s.rider.profile.drivingLicenseNumber;
       }
-      if (_type == VehicleType.bike && s.rider.profile.vehicle.type != VehicleType.unknown) {
+      if (_type == VehicleType.bike &&
+          s.rider.profile.vehicle.type != VehicleType.unknown) {
         _type = s.rider.profile.vehicle.type;
       }
     });
@@ -502,11 +530,21 @@ class _VehicleDetailsScreenState extends State<VehicleDetailsScreen> {
                         prefixIcon: Icon(Icons.two_wheeler_outlined),
                       ),
                       items: const [
-                        DropdownMenuItem(value: VehicleType.bike, child: Text('Bike')),
-                        DropdownMenuItem(value: VehicleType.scooter, child: Text('Scooter')),
-                        DropdownMenuItem(value: VehicleType.cycle, child: Text('Cycle')),
+                        DropdownMenuItem(
+                          value: VehicleType.bike,
+                          child: Text('Bike'),
+                        ),
+                        DropdownMenuItem(
+                          value: VehicleType.scooter,
+                          child: Text('Scooter'),
+                        ),
+                        DropdownMenuItem(
+                          value: VehicleType.cycle,
+                          child: Text('Cycle'),
+                        ),
                       ],
-                      onChanged: (v) => setState(() => _type = v ?? VehicleType.bike),
+                      onChanged: (v) =>
+                          setState(() => _type = v ?? VehicleType.bike),
                     ),
                     const SizedBox(height: 12),
                     TextField(
@@ -574,9 +612,9 @@ class _BankDetailsScreenState extends State<BankDetailsScreen> {
     );
     if (!mounted) return;
     setState(() => _saving = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Bank details saved')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Bank details saved')));
   }
 
   @override
@@ -671,7 +709,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _orderAlerts = s['orderAlerts'] == true;
         _sound = s['sound'] == true;
         _vibrate = s['vibration'] == true;
-        _language = (s['language']?.toString() ?? 'en') == 'hi' ? 'Hindi' : 'English';
+        _language = (s['language']?.toString() ?? 'en') == 'hi'
+            ? 'Hindi'
+            : 'English';
       });
     });
     return Scaffold(
@@ -687,7 +727,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     value: _orderAlerts,
                     onChanged: (v) async {
                       setState(() => _orderAlerts = v);
-                      await ApiClient().put('/v1/delivery/settings', body: {'orderAlerts': v});
+                      await ApiClient().put(
+                        '/v1/delivery/settings',
+                        body: {'orderAlerts': v},
+                      );
                     },
                     title: const Text('Order alerts'),
                     subtitle: const Text('Get notified for new requests'),
@@ -704,7 +747,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     value: _sound,
                     onChanged: (v) async {
                       setState(() => _sound = v);
-                      await ApiClient().put('/v1/delivery/settings', body: {'sound': v});
+                      await ApiClient().put(
+                        '/v1/delivery/settings',
+                        body: {'sound': v},
+                      );
                     },
                     title: const Text('Sound'),
                     subtitle: const Text('Play sound on new requests'),
@@ -721,7 +767,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     value: _vibrate,
                     onChanged: (v) async {
                       setState(() => _vibrate = v);
-                      await ApiClient().put('/v1/delivery/settings', body: {'vibration': v});
+                      await ApiClient().put(
+                        '/v1/delivery/settings',
+                        body: {'vibration': v},
+                      );
                     },
                     title: const Text('Vibration'),
                     subtitle: const Text('Vibrate on new requests'),
