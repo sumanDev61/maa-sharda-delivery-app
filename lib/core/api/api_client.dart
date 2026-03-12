@@ -3,9 +3,16 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+class ApiConfig {
+  static String get baseUrl {
+    const env = String.fromEnvironment('API_BASE_URL');
+    if (env.isNotEmpty) return env;
+    return 'https://maa-sharda-backend-production.up.railway.app';
+  }
+}
+
 class ApiClient {
-  static const String baseUrl =
-      'https://maa-sharda-backend-production.up.railway.app';
+  static String get baseUrl => ApiConfig.baseUrl;
 
   static final ApiClient _instance = ApiClient._internal();
   factory ApiClient() => _instance;
