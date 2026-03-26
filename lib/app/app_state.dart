@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../core/api/api_client.dart';
+import '../core/push/push_service.dart';
 
 class AppStateScope extends InheritedNotifier<AppState> {
   const AppStateScope({
@@ -427,6 +428,7 @@ class AppState extends ChangeNotifier {
       _loadMyOrders(),
       fetchAvailableOrders(),
     ]);
+    await PushService.trySyncToken();
     _autoRefreshTimer?.cancel();
     _autoRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) async {
       if (!rider.isOnline) return;
