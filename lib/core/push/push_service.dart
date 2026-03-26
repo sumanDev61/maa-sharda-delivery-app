@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
 import '../api/api_client.dart';
+import 'local_notification_service.dart';
 
 class PushService {
   static bool _initialized = false;
@@ -24,6 +25,16 @@ class PushService {
     try {
       await FirebaseMessaging.instance.requestPermission();
     } catch (_) {}
+
+    FirebaseMessaging.onMessage.listen((message) async {
+      final title = message.notification?.title ?? '';
+      final body = message.notification?.body ?? '';
+      if (title.isEmpty && body.isEmpty) return;
+      await LocalNotificationService().show(
+        title: title.isEmpty ? 'Notification' : title,
+        body: body,
+      );
+    });
 
     try {
       _cachedToken = await FirebaseMessaging.instance.getToken();
