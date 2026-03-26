@@ -291,12 +291,11 @@ class _LoginScreenState extends State<_LoginScreen> {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         final d = (data['data'] as Map?)?.cast<String, dynamic>() ?? {};
         final riderId = d['rider_id']?.toString() ?? '';
-        final otp = d['otp']?.toString();
         if (riderId.isEmpty) {
           throw Exception('Invalid response');
         }
         setState(() => _loading = false);
-        widget.onContinue(digits, riderId, otp);
+        widget.onContinue(digits, riderId, null);
         return;
       }
 
@@ -451,12 +450,11 @@ class _RegisterScreenState extends State<_RegisterScreen> {
         final data = jsonDecode(res.body) as Map<String, dynamic>;
         final d = (data['data'] as Map?)?.cast<String, dynamic>() ?? {};
         final riderId = d['rider_id']?.toString() ?? '';
-        final otp = d['otp']?.toString();
         if (riderId.isEmpty) {
           throw Exception('Invalid response');
         }
         setState(() => _loading = false);
-        widget.onContinue(widget.phone, riderId, otp);
+        widget.onContinue(widget.phone, riderId, null);
         return;
       }
 
@@ -554,7 +552,6 @@ class _OtpScreen extends StatefulWidget {
 class _OtpScreenState extends State<_OtpScreen> {
   final _controller = TextEditingController();
   bool _loading = false;
-  String? _shownOtp;
 
   @override
   void dispose() {
@@ -567,13 +564,10 @@ class _OtpScreenState extends State<_OtpScreen> {
     super.initState();
     final otp = widget.otp?.trim();
     if (otp != null && otp.isNotEmpty) {
-      _shownOtp = otp;
-      if (otp.length == 6) {
-        _controller.text = otp;
-        _controller.selection = TextSelection.fromPosition(
-          TextPosition(offset: otp.length),
-        );
-      }
+      _controller.text = otp;
+      _controller.selection = TextSelection.fromPosition(
+        TextPosition(offset: otp.length),
+      );
     }
   }
 
@@ -650,41 +644,7 @@ class _OtpScreenState extends State<_OtpScreen> {
               Text('Enter OTP', style: textTheme.titleLarge),
               const SizedBox(height: 6),
               Text('Sent to +91 ${widget.phone}', style: textTheme.bodySmall),
-              if ((_shownOtp ?? '').trim().isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEEF2FF),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFC7D2FE)),
-                  ),
-                  child: RichText(
-                    text: TextSpan(
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Color(0xFF1E293B),
-                        height: 1.3,
-                        fontWeight: FontWeight.w600,
-                      ),
-                      children: [
-                        const TextSpan(text: 'Here is your OTP: '),
-                        TextSpan(
-                          text: _shownOtp!,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w900,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+              // OTP is delivered via SMS (Twilio Verify).
               const SizedBox(height: 18),
               TextField(
                 controller: _controller,
@@ -716,16 +676,7 @@ class _OtpScreenState extends State<_OtpScreen> {
                               );
                               if (!mounted) return;
                               if (res.statusCode == 200) {
-                                final data =
-                                    jsonDecode(res.body)
-                                        as Map<String, dynamic>;
-                                final d =
-                                    (data['data'] as Map?)
-                                        ?.cast<String, dynamic>() ??
-                                    {};
-                                setState(
-                                  () => _shownOtp = d['otp']?.toString(),
-                                );
+                                // OTP resent via SMS
                               }
                             } catch (_) {}
                             if (mounted) setState(() => _loading = false);
