@@ -2,17 +2,12 @@ import 'dart:async';
 import 'package:flutter/services.dart';
 
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import '../../app/app_state.dart';
 import '../../app/theme/app_theme.dart';
 import '../../core/api/api_client.dart';
 import '../../ui/primary_button.dart';
 import 'dart:convert';
-
-const MethodChannel _deviceUtilsChannel = MethodChannel(
-  'maa_sharda/device_utils',
-);
 
 class AuthFlow extends StatefulWidget {
   const AuthFlow({super.key});
@@ -143,14 +138,6 @@ class _LoginScreenState extends State<_LoginScreen> {
   final _controller = TextEditingController();
   final _focusNode = FocusNode();
   bool _loading = false;
-  List<String> _simNumbers = const [];
-  bool _isDetectingSim = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadSimNumbers();
-  }
 
   @override
   void dispose() {
@@ -161,121 +148,12 @@ class _LoginScreenState extends State<_LoginScreen> {
 
   String _digitsOnly(String input) => input.replaceAll(RegExp(r'[^0-9]'), '');
 
-  String _lastTenDigits(String input) {
-    final digits = _digitsOnly(input);
-    if (digits.length <= 10) return digits;
-    return digits.substring(digits.length - 10);
-  }
-
-  bool _isEnteredNumberFromDeviceSim(String enteredPhone) {
-    if (_simNumbers.isEmpty) return true;
-    final entered = _lastTenDigits(enteredPhone);
-    if (entered.length < 10) return false;
-    return _simNumbers.any((sim) => _lastTenDigits(sim) == entered);
-  }
-
-  Future<void> _loadSimNumbers() async {
-    setState(() => _isDetectingSim = true);
-    try {
-      final phonePermission = await Permission.phone.request();
-      if (!phonePermission.isGranted) return;
-      final result = await _deviceUtilsChannel.invokeMethod<List<dynamic>>(
-        'getSimNumbers',
-      );
-      final values = (result ?? const <dynamic>[])
-          .map((e) => e?.toString().trim() ?? '')
-          .where((e) => e.isNotEmpty)
-          .toSet()
-          .toList();
-      if (!mounted) return;
-      setState(() => _simNumbers = values);
-      if (_simNumbers.length == 1 && _controller.text.trim().isEmpty) {
-        _controller.text = _lastTenDigits(_simNumbers.first);
-        _controller.selection = TextSelection.fromPosition(
-          TextPosition(offset: _controller.text.length),
-        );
-      }
-    } catch (_) {
-      // Best-effort SIM detection only.
-    } finally {
-      if (mounted) setState(() => _isDetectingSim = false);
-    }
-  }
-
-  Future<void> _suggestSimNumber() async {
-    if (_simNumbers.isEmpty) {
-      await _loadSimNumbers();
-    }
-    if (!mounted || _simNumbers.isEmpty) return;
-    if (_simNumbers.length == 1) {
-      _controller.text = _lastTenDigits(_simNumbers.first);
-      _controller.selection = TextSelection.fromPosition(
-        TextPosition(offset: _controller.text.length),
-      );
-      return;
-    }
-
-    await showModalBottomSheet<void>(
-      context: context,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const ListTile(
-              title: Text(
-                'Choose SIM Number',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
-            ),
-            ..._simNumbers.asMap().entries.map((entry) {
-              final i = entry.key;
-              final number = entry.value;
-              return ListTile(
-                leading: CircleAvatar(
-                  radius: 14,
-                  backgroundColor: const Color(0xFFEFF6FF),
-                  child: Text(
-                    '${i + 1}',
-                    style: const TextStyle(
-                      color: Color(0xFF2563EB),
-                      fontWeight: FontWeight.w800,
-                      fontSize: 12,
-                    ),
-                  ),
-                ),
-                title: Text(number),
-                onTap: () {
-                  _controller.text = _lastTenDigits(number);
-                  _controller.selection = TextSelection.fromPosition(
-                    TextPosition(offset: _controller.text.length),
-                  );
-                  Navigator.pop(sheetContext);
-                },
-              );
-            }),
-            const SizedBox(height: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
   Future<void> _submit() async {
     final raw = _controller.text.trim();
     final digits = _digitsOnly(raw);
     if (digits.length != 10) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a 10-digit mobile number')),
-      );
-      return;
-    }
-    if (!_isEnteredNumberFromDeviceSim(digits)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'This mobile number is not available in this phone. Please enter your active SIM number.',
-          ),
-        ),
       );
       return;
     }
@@ -364,21 +242,9 @@ class _LoginScreenState extends State<_LoginScreen> {
                 textInputAction: TextInputAction.done,
                 onChanged: (_) => setState(() {}),
                 onSubmitted: (_) => _submit(),
-                onTap: _suggestSimNumber,
                 decoration: InputDecoration(
                   prefixIcon: Icon(Icons.phone_android),
-                  hintText: _isDetectingSim
-                      ? 'Detecting SIM numbers...'
-                      : (_simNumbers.isNotEmpty
-                            ? 'Tap to pick SIM number'
-                            : 'Phone number'),
-                  suffixIcon: _simNumbers.isNotEmpty
-                      ? IconButton(
-                          onPressed: _suggestSimNumber,
-                          icon: const Icon(Icons.sim_card, size: 20),
-                          tooltip: 'Choose SIM number',
-                        )
-                      : null,
+                  hintText: 'Phone number',
                 ),
               ),
               const SizedBox(height: 12),
