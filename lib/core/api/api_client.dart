@@ -1,13 +1,43 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiConfig {
+  static const String _prodUrl =
+      'https://maa-sharda-backend-production.up.railway.app';
+
+  static bool _isLocalHost(String host) {
+    if (host.isEmpty) return false;
+    if (host == 'localhost' || host == '127.0.0.1' || host.endsWith('.local')) {
+      return true;
+    }
+    if (host.startsWith('10.')) return true;
+    if (host.startsWith('192.168.')) return true;
+    if (host.startsWith('172.')) {
+      final parts = host.split('.');
+      if (parts.length > 1) {
+        final second = int.tryParse(parts[1]);
+        if (second != null && second >= 16 && second <= 31) return true;
+      }
+    }
+    return false;
+  }
+
   static String get baseUrl {
     const env = String.fromEnvironment('API_BASE_URL');
-    if (env.isNotEmpty) return env;
-    return 'https://maa-sharda-backend-production.up.railway.app';
+    if (env.isNotEmpty) {
+      final parsed = Uri.tryParse(env);
+      final host = (parsed?.host.isNotEmpty ?? false)
+          ? parsed!.host
+          : (Uri.tryParse('https://$env')?.host ?? '');
+      if (kReleaseMode && _isLocalHost(host)) {
+        return _prodUrl;
+      }
+      return env;
+    }
+    return _prodUrl;
   }
 }
 

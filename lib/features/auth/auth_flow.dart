@@ -644,7 +644,7 @@ class _OtpScreenState extends State<_OtpScreen> {
               Text('Enter OTP', style: textTheme.titleLarge),
               const SizedBox(height: 6),
               Text('Sent to +91 ${widget.phone}', style: textTheme.bodySmall),
-              // OTP is delivered via SMS (Twilio Verify).
+              // OTP is delivered via SMS (MessageCentral).
               const SizedBox(height: 18),
               TextField(
                 controller: _controller,
