@@ -1,4 +1,4 @@
-package com.example.rider_app
+package com.maasharda.godriver
 
 import android.os.Build
 import android.telephony.SubscriptionManager

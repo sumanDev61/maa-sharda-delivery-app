@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "798103730796",
+    "project_id": "maa-sharda-go",
+    "storage_bucket": "maa-sharda-go.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:798103730796:android:e426677f1966642f6cb649",
+        "android_client_info": {
+          "package_name": "com.maasharda.go"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDGtwqjhZy0adjL0j8-h1YYcacBzjTdebs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:798103730796:android:9b103e045295dd0e6cb649",
+        "android_client_info": {
+          "package_name": "com.maasharda.godriver"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDGtwqjhZy0adjL0j8-h1YYcacBzjTdebs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

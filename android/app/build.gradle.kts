@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.rider_app"
+    namespace = "com.maasharda.godriver"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -21,7 +21,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.maasharda.delivery"
+        applicationId = "com.maasharda.godriver"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
