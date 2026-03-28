@@ -28,14 +28,15 @@ class ApiConfig {
   static String get baseUrl {
     const env = String.fromEnvironment('API_BASE_URL');
     if (env.isNotEmpty) {
-      final parsed = Uri.tryParse(env);
+      final fixedEnv = env.replaceAll('wailway', 'railway');
+      final parsed = Uri.tryParse(fixedEnv);
       final host = (parsed?.host.isNotEmpty ?? false)
           ? parsed!.host
-          : (Uri.tryParse('https://$env')?.host ?? '');
+          : (Uri.tryParse('https://$fixedEnv')?.host ?? '');
       if (kReleaseMode && _isLocalHost(host)) {
         return _prodUrl;
       }
-      return env;
+      return fixedEnv;
     }
     return _prodUrl;
   }
