@@ -459,8 +459,9 @@ class AppState extends ChangeNotifier {
     await Future.wait([fetchAvailableOrders(), _loadMyOrders()]);
   }
 
-  Future<void> refreshEarnings() async {
-    await _loadTrips();
+  Future<void> refreshEarnings({DateTime? month}) async {
+    final m = month ?? DateTime.now();
+    await _loadTrips(month: m);
   }
 
   Future<void> _loadProfile() async {
@@ -498,7 +499,7 @@ class AppState extends ChangeNotifier {
           vehicleRc: _docStatus(d['rc']?.toString()),
         ),
         drivingLicenseNumber: v['driving_license_number']?.toString() ?? '',
-        photoPath: rider.profile.photoPath,
+        photoPath: g['photo_url']?.toString() ?? rider.profile.photoPath,
       );
       rider.verification = _mapApprovalStatus(approval);
       notifyListeners();
@@ -516,26 +517,41 @@ class AppState extends ChangeNotifier {
     } catch (_) {}
   }
 
-  Future<void> _loadTrips() async {
+  Future<void> _loadTrips({DateTime? month}) async {
     try {
-      final res = await ApiClient().get('/v1/delivery/trips');
+      final start = month == null ? null : DateTime(month.year, month.month, 1);
+      final end = month == null
+          ? null
+          : DateTime(month.year, month.month + 1, 0, 23, 59, 59, 999);
+      final qs = (start == null || end == null)
+          ? ''
+          : '?from=${Uri.encodeComponent(start.toIso8601String())}&to=${Uri.encodeComponent(end.toIso8601String())}';
+      final res = await ApiClient().get('/v1/delivery/trips$qs');
       final list = (await _decode(res)) as List<dynamic>;
       earnings.trips.clear();
       for (final t in list) {
         final amount = (t['amount'] as num?)?.toDouble() ?? 0.0;
         final cash = (t['cash_collected'] as num?)?.toInt() ?? 0;
+        final basePay = (t['base_pay'] as num?)?.toDouble() ?? amount;
+        final distancePay = (t['distance_pay'] as num?)?.toDouble() ?? 0.0;
+        final surge = (t['surge'] as num?)?.toDouble() ?? 0.0;
+        final tips = (t['tips'] as num?)?.toDouble() ?? 0.0;
+        final incentive = (t['incentive'] as num?)?.toDouble() ?? 0.0;
         final created =
             DateTime.tryParse(t['created_at']?.toString() ?? '') ??
             DateTime.now();
+        final rawOrderId = t['order_id']?.toString() ?? '';
+        final digitsOnly = rawOrderId.replaceAll(RegExp(r'\\D'), '');
+        final orderId = int.tryParse(digitsOnly) ?? 0;
         earnings.addTrip(
           TripEarning(
-            orderId: 0,
+            orderId: orderId,
             createdAt: created,
-            baseFare: amount,
-            distanceFare: 0,
-            surge: 0,
-            tips: 0,
-            incentive: 0,
+            baseFare: basePay,
+            distanceFare: distancePay,
+            surge: surge,
+            tips: tips,
+            incentive: incentive,
             isCod: cash > 0,
             cashCollected: cash,
           ),

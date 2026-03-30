@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:in_app_update/in_app_update.dart';
 
 import '../../app/app_state.dart';
 import '../../app/theme/app_theme.dart';
@@ -21,7 +23,23 @@ class _HomeShellState extends State<HomeShell> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       AppStateScope.of(context).refreshEarnings();
       AppStateScope.of(context).refreshOrders();
+      _checkForInAppUpdate();
     });
+  }
+
+  Future<void> _checkForInAppUpdate() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      final info = await InAppUpdate.checkForUpdate();
+      if (info.updateAvailability == UpdateAvailability.updateAvailable) {
+        if (info.immediateUpdateAllowed) {
+          await InAppUpdate.performImmediateUpdate();
+        } else if (info.flexibleUpdateAllowed) {
+          await InAppUpdate.startFlexibleUpdate();
+          await InAppUpdate.completeFlexibleUpdate();
+        }
+      }
+    } catch (_) {}
   }
 
   @override
@@ -99,11 +117,7 @@ class _HomeTab extends StatelessWidget {
           elevation: 0,
           leading: const Padding(
             padding: EdgeInsets.all(8.0),
-            child: CircleAvatar(
-              backgroundImage: NetworkImage(
-                'https://i.pravatar.cc/150?u=rider',
-              ),
-            ),
+            child: _ProfileAvatar(),
           ),
           title: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -382,6 +396,26 @@ class _HomeTab extends StatelessWidget {
   }
 }
 
+class _ProfileAvatar extends StatelessWidget {
+  const _ProfileAvatar();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = AppStateScope.of(context);
+    final url = state.rider.profile.photoPath.trim();
+    if (url.isEmpty) {
+      return const CircleAvatar(
+        backgroundColor: Color(0xFFE2E8F0),
+        child: Icon(Icons.person, color: Color(0xFF64748B)),
+      );
+    }
+    return CircleAvatar(
+      backgroundImage: NetworkImage(url),
+      backgroundColor: const Color(0xFFE2E8F0),
+    );
+  }
+}
+
 class _OrdersTab extends StatelessWidget {
   const _OrdersTab();
 
@@ -530,25 +564,114 @@ class _EarningsTab extends StatefulWidget {
 }
 
 class _EarningsTabState extends State<_EarningsTab> {
+  DateTime _selectedMonth = DateTime(DateTime.now().year, DateTime.now().month, 1);
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      AppStateScope.of(context).refreshEarnings();
+      AppStateScope.of(context).refreshEarnings(month: _selectedMonth);
+    });
+  }
+
+  Future<void> _pickMonth() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedMonth,
+      firstDate: DateTime(2022),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      helpText: 'Select month',
+    );
+    if (picked == null) return;
+    final next = DateTime(picked.year, picked.month, 1);
+    setState(() => _selectedMonth = next);
+    await AppStateScope.of(context).refreshEarnings(month: next);
+  }
+
+  bool _sameMonth(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month;
+
+  DateTime _focusDate() {
+    final now = DateTime.now();
+    return _sameMonth(now, _selectedMonth) ? now : _selectedMonth;
+  }
+
+  String _monthLabel(DateTime m) {
+    const names = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${names[m.month - 1]} ${m.year}';
+  }
+
+  bool _sameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  List<TripEarning> _tripsForMonth(List<TripEarning> trips) {
+    final start = DateTime(_selectedMonth.year, _selectedMonth.month, 1);
+    final end = DateTime(_selectedMonth.year, _selectedMonth.month + 1, 0, 23, 59, 59, 999);
+    return trips.where((t) => t.createdAt.isAfter(start.subtract(const Duration(milliseconds: 1))) && t.createdAt.isBefore(end.add(const Duration(milliseconds: 1)))).toList();
+  }
+
+  double _dayTotal(DateTime day, List<TripEarning> trips) {
+    return trips
+        .where((t) => _sameDay(t.createdAt, day))
+        .fold(0, (s, t) => s + t.total);
+  }
+
+  _Breakdown _breakdownFor(DateTime day, List<TripEarning> trips) {
+    double base = 0;
+    double distance = 0;
+    double surge = 0;
+    double tips = 0;
+    double incentive = 0;
+    for (final t in trips.where((t) => _sameDay(t.createdAt, day))) {
+      base += t.baseFare;
+      distance += t.distanceFare;
+      surge += t.surge;
+      tips += t.tips;
+      incentive += t.incentive;
+    }
+    return _Breakdown(
+      basePay: base + distance + surge,
+      tips: tips,
+      incentives: incentive,
+      total: base + distance + surge + tips + incentive,
+    );
+  }
+
+  List<_WeekBar> _weekBars(DateTime focus, List<TripEarning> trips) {
+    final weekStart = focus.subtract(Duration(days: focus.weekday - 1));
+    return List.generate(7, (i) {
+      final day = weekStart.add(Duration(days: i));
+      final total = _dayTotal(day, trips);
+      return _WeekBar(
+        label: const ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i],
+        value: total,
+        isSelected: day.weekday == focus.weekday,
+      );
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final state = AppStateScope.of(context);
+    final focus = _focusDate();
+    final monthTrips = _tripsForMonth(state.earnings.trips);
+    final dayTotal = _dayTotal(focus, monthTrips);
+    final breakdown = _breakdownFor(focus, monthTrips);
+    final weekBars = _weekBars(focus, monthTrips);
+    final maxWeekValue = weekBars.fold<double>(0, (m, b) => b.value > m ? b.value : m);
+    final weekTotal = weekBars.fold<double>(0, (s, b) => s + b.value);
+
     return Scaffold(
       backgroundColor: const Color(0xFF0C140E), // Very dark green background
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         title: Column(
-          children: const [
-            Text(
+          children: [
+            const Text(
               'Earnings',
               style: TextStyle(
                 color: Colors.white,
@@ -556,16 +679,23 @@ class _EarningsTabState extends State<_EarningsTab> {
                 fontSize: 18,
               ),
             ),
-            Text(
-              'Nov 13 - Nov 19 ⌄',
-              style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+            InkWell(
+              onTap: _pickMonth,
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                child: Text(
+                  '${_monthLabel(_selectedMonth)} ⌄',
+                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                ),
+              ),
             ),
           ],
         ),
         centerTitle: true,
         actions: [
           IconButton(
-            onPressed: () => state.refreshEarnings(),
+            onPressed: () => state.refreshEarnings(month: _selectedMonth),
             icon: const Icon(Icons.refresh, color: Colors.white),
           ),
           const SizedBox(width: 8),
@@ -591,7 +721,7 @@ class _EarningsTabState extends State<_EarningsTab> {
           const SizedBox(height: 8),
           Center(
             child: Text(
-              '₹ ${state.earnings.todayTotal.toStringAsFixed(0)}',
+              '₹ ${dayTotal.toStringAsFixed(0)}',
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 48,
@@ -662,7 +792,7 @@ class _EarningsTabState extends State<_EarningsTab> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
-                        '₹ ${state.earnings.weekTotal.toStringAsFixed(0)}',
+                        '₹ ${weekTotal.toStringAsFixed(0)}',
                         style: const TextStyle(
                           color: Color(0xFF00E676),
                           fontWeight: FontWeight.w900,
@@ -675,38 +805,37 @@ class _EarningsTabState extends State<_EarningsTab> {
                 const SizedBox(height: 48),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-                      .map((day) {
-                        final isToday = day == 'Fri';
-                        return Column(
-                          children: [
-                            Container(
-                              width: 8,
-                              height: day == 'Wed' ? 80 : 40,
-                              decoration: BoxDecoration(
-                                color: isToday
-                                    ? const Color(0xFF00E676)
-                                    : const Color(0xFF2D3C2F),
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              day,
-                              style: TextStyle(
-                                color: isToday
-                                    ? const Color(0xFF00E676)
-                                    : const Color(0xFF64748B),
-                                fontSize: 11,
-                                fontWeight: isToday
-                                    ? FontWeight.w900
-                                    : FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        );
-                      })
-                      .toList(),
+                  children: weekBars.map((bar) {
+                    final ratio = maxWeekValue <= 0 ? 0 : (bar.value / maxWeekValue);
+                    final height = 24 + (ratio * 70);
+                    return Column(
+                      children: [
+                        Container(
+                          width: 8,
+                          height: height,
+                          decoration: BoxDecoration(
+                            color: bar.isSelected
+                                ? const Color(0xFF00E676)
+                                : const Color(0xFF2D3C2F),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          bar.label,
+                          style: TextStyle(
+                            color: bar.isSelected
+                                ? const Color(0xFF00E676)
+                                : const Color(0xFF64748B),
+                            fontSize: 11,
+                            fontWeight: bar.isSelected
+                                ? FontWeight.w900
+                                : FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
                 ),
               ],
             ),
@@ -721,7 +850,7 @@ class _EarningsTabState extends State<_EarningsTab> {
             ),
           ),
           const SizedBox(height: 16),
-          _breakdownGrid(),
+          _breakdownGrid(breakdown),
           const SizedBox(height: 32),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -758,7 +887,7 @@ class _EarningsTabState extends State<_EarningsTab> {
             ),
           ),
           const SizedBox(height: 16),
-          ...state.earnings.trips
+          ...monthTrips
               .take(10)
               .map(
                 (t) => _tripTile(
@@ -774,7 +903,7 @@ class _EarningsTabState extends State<_EarningsTab> {
     );
   }
 
-  Widget _breakdownGrid() {
+  Widget _breakdownGrid(_Breakdown breakdown) {
     return GridView.count(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -785,25 +914,25 @@ class _EarningsTabState extends State<_EarningsTab> {
       children: [
         _breakdownCard(
           'Base Pay',
-          '₹85.00',
+          '₹${breakdown.basePay.toStringAsFixed(0)}',
           Icons.local_shipping_outlined,
           const Color(0xFF3B82F6),
         ),
         _breakdownCard(
           'Tips',
-          '₹42.50',
+          '₹${breakdown.tips.toStringAsFixed(0)}',
           Icons.favorite_border,
           const Color(0xFFA855F7),
         ),
         _breakdownCard(
           'Incentives',
-          '₹15.00',
+          '₹${breakdown.incentives.toStringAsFixed(0)}',
           Icons.local_fire_department_outlined,
           const Color(0xFFF97316),
         ),
         _breakdownCard(
           'Total Today',
-          '₹142.50',
+          '₹${breakdown.total.toStringAsFixed(0)}',
           Icons.account_balance_wallet_outlined,
           const Color(0xFF00E676),
           isTotal: true,
@@ -947,6 +1076,32 @@ class _EarningsTabState extends State<_EarningsTab> {
     final m = dt.month.toString().padLeft(2, '0');
     return '$d/$m';
   }
+}
+
+class _Breakdown {
+  const _Breakdown({
+    required this.basePay,
+    required this.tips,
+    required this.incentives,
+    required this.total,
+  });
+
+  final double basePay;
+  final double tips;
+  final double incentives;
+  final double total;
+}
+
+class _WeekBar {
+  const _WeekBar({
+    required this.label,
+    required this.value,
+    required this.isSelected,
+  });
+
+  final String label;
+  final double value;
+  final bool isSelected;
 }
 
 class _TripsListScreen extends StatelessWidget {
