@@ -806,8 +806,10 @@ class _EarningsTabState extends State<_EarningsTab> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: weekBars.map((bar) {
-                    final ratio = maxWeekValue <= 0 ? 0 : (bar.value / maxWeekValue);
-                    final height = 24 + (ratio * 70);
+                    final ratio = maxWeekValue <= 0
+                        ? 0.0
+                        : (bar.value / maxWeekValue).toDouble();
+                    final height = 24.0 + (ratio * 70.0);
                     return Column(
                       children: [
                         Container(
