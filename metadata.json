@@ -1,0 +1,8 @@
+{
+  "name": "Maa Sharda Rider",
+  "description": "Delivery partner app for Maa Sharda Go featuring order management, OTP delivery confirmation, live trip tracking, and earnings breakdown.",
+  "permissions": [],
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

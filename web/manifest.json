@@ -1,11 +1,11 @@
 {
-    "name": "rider_app",
-    "short_name": "rider_app",
+    "name": "Maa Sharda Rider",
+    "short_name": "Rider",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#00E676",
+    "theme_color": "#00E676",
+    "description": "Delivery partner app for Maa Sharda Go featuring order management, OTP delivery confirmation, live trip tracking, and earnings breakdown.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
