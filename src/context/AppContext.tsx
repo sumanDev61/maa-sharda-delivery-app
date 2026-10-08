@@ -107,51 +107,6 @@ const emptyProfile: RiderProfile = {
 };
 
 // Generate realistic city order for active shift testing
-function generateNearbyOrder(): OrderRequest {
-  const restaurants = [
-    { name: 'Sharda Sweets & Dhaba', area: 'City Center Market, Bhopal', prepMin: 8 },
-    { name: 'Biryani Darbar', area: 'Civil Lines, Bhopal', prepMin: 12 },
-    { name: 'Chai & Samosa Junction', area: 'MP Nagar Zone 1, Bhopal', prepMin: 5 },
-    { name: 'Bhopali Zaika Kitchen', area: 'New Market, TT Nagar', prepMin: 10 },
-  ];
-  const drops = [
-    'A-14 Sharda Heights, Kolar Road',
-    'Flat 302, Green Meadows, Arera Colony',
-    'Plot 88, Royal Residency, Hoshangabad Rd',
-    'House 12, Gulmohar Colony, Bhopal',
-  ];
-
-  const pick = restaurants[Math.floor(Math.random() * restaurants.length)];
-  const drop = drops[Math.floor(Math.random() * drops.length)];
-  const pickupKm = Number((0.6 + Math.random() * 1.8).toFixed(1));
-  const deliveryKm = Number((1.2 + Math.random() * 3.5).toFixed(1));
-  const totalKm = Number((pickupKm + deliveryKm).toFixed(1));
-  const expectedEarning = Math.round(25 + totalKm * 11 + (Math.random() > 0.4 ? 15 : 0));
-  const isCod = Math.random() > 0.5;
-
-  return {
-    id: 1000 + Math.floor(Math.random() * 9000),
-    restaurantName: pick.name,
-    restaurantArea: pick.area,
-    dropArea: drop,
-    pickupDistanceKm: pickupKm,
-    deliveryDistanceKm: deliveryKm,
-    totalDistanceKm: totalKm,
-    etaMin: Math.round(15 + totalKm * 4),
-    expectedEarning,
-    cashToCollect: isCod ? Math.round(160 + Math.random() * 380) : 0,
-    createdAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + 60000).toISOString(),
-    pickupOtp: String(1000 + Math.floor(Math.random() * 9000)),
-    deliveryOtp: String(1000 + Math.floor(Math.random() * 9000)),
-    orderAmount: isCod ? Math.round(220 + Math.random() * 300) : 250,
-    items: [
-      { name: 'Special Thali Meal', quantity: 1 },
-      { name: 'Fresh Lime Beverage', quantity: 2 },
-    ],
-  };
-}
-
 function calculateFare(req: OrderRequest): FareBreakdown {
   const baseFare = 25;
   const distanceFare = Math.round(req.totalDistanceKm * 10);
@@ -349,20 +304,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [trips, session.riderId]);
 
-  // If online and requests queue is empty, schedule realistic incoming requests
+  // If online, fetch available orders from API
   useEffect(() => {
     if (!session.isLoggedIn || !isOnline) {
       setRequests([]);
       return;
     }
 
-    if (requests.length === 0 && activeOrders.length === 0) {
-      const timer = setTimeout(() => {
-        setRequests([generateNearbyOrder()]);
-      }, 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [session.isLoggedIn, isOnline, requests.length, activeOrders.length]);
+    fetchAvailableOrders();
+  }, [session.isLoggedIn, isOnline]);
 
   const isOnboardingComplete = useMemo(() => {
     return (
@@ -421,89 +371,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return { ok: true };
       }
 
-      // Check local registered rider registry if backend had cold start or 502
-      const registryRaw = localStorage.getItem('registered_riders');
-      if (registryRaw) {
-        try {
-          const registry: Record<string, any> = JSON.parse(registryRaw);
-          const userKey = cleanId.toLowerCase();
-          const match = Object.values(registry).find(
-            (u: any) =>
-              (u.username && u.username.toLowerCase() === userKey) ||
-              (u.phone && u.phone === cleanId.replace(/\D/g, '')) ||
-              (u.riderId && u.riderId.toLowerCase() === userKey)
-          );
-
-          if (match) {
-            if (match.password === password.trim()) {
-              const token = `token_auth_${Date.now()}`;
-              api.setAuthSession(token, match.riderId);
-              localStorage.setItem('rider_phone', match.phone);
-              localStorage.setItem('rider_username', match.username || match.phone);
-              localStorage.setItem('rider_name', match.name);
-
-              setSession({
-                isLoggedIn: true,
-                phone: match.phone,
-                username: match.username || match.phone,
-                name: match.name,
-                riderId: match.riderId,
-                token,
-              });
-
-              // Load profile for this rider
-              const savedProf = localStorage.getItem(`rider_profile_${match.riderId}`);
-              if (savedProf) {
-                setProfile(JSON.parse(savedProf));
-              } else {
-                setProfile({
-                  ...emptyProfile,
-                  name: match.name,
-                  email: match.email || '',
-                  vehicle: { type: match.vehicleType || 'bike', number: match.vehicleNumber || 'MP-04-AB-1234' },
-                });
-              }
-
-              return { ok: true };
-            } else {
-              return { ok: false, error: 'Incorrect password. Please try again.' };
-            }
-          }
-        } catch (_) {}
-      }
-
-      // If neither API nor registry succeeded
-      if (res.status === 401 || res.status === 403) {
-        return { ok: false, error: res.error || 'Invalid User ID or Password' };
-      }
-
-      // Allow quick demo partner login if username is 'rider' or starts with 'MS-'
-      if (cleanId.length >= 4 && password.length >= 4) {
-        const token = `token_auth_${Date.now()}`;
-        const riderId = cleanId.startsWith('MS-') ? cleanId : `MS-${cleanId.toUpperCase()}`;
-        api.setAuthSession(token, riderId);
-        localStorage.setItem('rider_phone', cleanId.replace(/\D/g, '') || '9876543210');
-        localStorage.setItem('rider_username', cleanId);
-        localStorage.setItem('rider_name', cleanId);
-
-        setSession({
-          isLoggedIn: true,
-          phone: cleanId.replace(/\D/g, ''),
-          username: cleanId,
-          name: cleanId,
-          riderId,
-          token,
-        });
-
-        setProfile((prev) => ({
-          ...prev,
-          name: cleanId,
-        }));
-
-        return { ok: true };
-      }
-
-      return { ok: false, error: res.error || 'Authentication failed. Please verify your credentials.' };
+      return { ok: false, error: res.error || 'Authentication failed. Invalid credentials.' };
     } catch (err: any) {
       return { ok: false, error: err?.message || 'Login request failed. Server offline or unreachable.' };
     }
@@ -541,20 +409,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const assignedId = res.data?.data?.rider_id || res.data?.rider_id || genRiderId;
 
-      // Save to registered rider local database
-      const registryRaw = localStorage.getItem('registered_riders');
-      const registry: Record<string, any> = registryRaw ? JSON.parse(registryRaw) : {};
-      registry[cleanPhone] = {
-        name,
-        phone: cleanPhone,
-        email,
-        password,
-        riderId: assignedId,
-        vehicleType: vehicleType || 'bike',
-        createdAt: new Date().toISOString(),
-      };
-      localStorage.setItem('registered_riders', JSON.stringify(registry));
-
       // Setup clean profile for this rider
       const newProf: RiderProfile = {
         ...emptyProfile,
@@ -565,7 +419,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           number: '',
         },
       };
-      localStorage.setItem(`rider_profile_${assignedId}`, JSON.stringify(newProf));
       setProfile(newProf);
 
       return { ok: true, riderId: assignedId };
@@ -723,10 +576,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }));
       setRequests(mapped);
     } else {
-      // Keep fresh available request in queue
-      if (requests.length === 0 && activeOrders.length === 0) {
-        setRequests([generateNearbyOrder()]);
-      }
+      setRequests([]);
     }
   };
 
