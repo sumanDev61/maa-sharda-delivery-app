@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bike, Phone, ArrowLeft, Lock, Eye, EyeOff, ShieldCheck, User, Mail } from 'lucide-react';
+import { Bike, Phone, ArrowLeft, Lock, Eye, EyeOff, ShieldCheck, User, Mail, MapPin, Navigation } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { useToast } from '../components/Toast';
@@ -30,6 +30,8 @@ export const AuthScreen: React.FC = () => {
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
   const [regVehicle, setRegVehicle] = useState<VehicleType>('bike');
+  const [regCity, setRegCity] = useState('');
+  const [isLocating, setIsLocating] = useState(false);
 
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -87,9 +89,51 @@ export const AuthScreen: React.FC = () => {
     const res = await verifyOtp(phone, riderIdForOtp, otp);
     setLoading(false);
     if (res.ok) {
-      showToast('Phone verified! Logged in successfully.', 'success');
+      if (res.isExistingUser) {
+        showToast('Login successful! Welcome back.', 'success');
+      } else {
+        showToast('Mobile verified! Please fill registration details.', 'info');
+        setRegPhone(phone);
+        setMode('register');
+      }
     } else {
       setErrorMsg(res.error || 'Invalid OTP code. Please retry.');
+    }
+  };
+
+  const handleFetchLocation = () => {
+    if ('geolocation' in navigator) {
+      setIsLocating(true);
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const { latitude, longitude } = pos.coords;
+          try {
+            const resp = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+            );
+            const data = await resp.json();
+            const sub = data?.address?.suburb || data?.address?.neighbourhood || data?.address?.road || '';
+            const city = data?.address?.city || data?.address?.town || data?.address?.county || 'Bhopal';
+            const locStr = sub ? `${sub}, ${city}` : city;
+            setRegCity(locStr);
+            showToast(`Location set: ${locStr}`, 'success');
+          } catch (_) {
+            setRegCity('Current Area, Bhopal');
+            showToast('Location set: Current Area, Bhopal', 'success');
+          } finally {
+            setIsLocating(false);
+          }
+        },
+        () => {
+          setIsLocating(false);
+          setRegCity('Current Area, Bhopal');
+          showToast('Location set: Current Area, Bhopal', 'info');
+        },
+        { timeout: 8000 }
+      );
+    } else {
+      setRegCity('Current Area, Bhopal');
+      showToast('Location set: Current Area, Bhopal', 'info');
     }
   };
 
@@ -122,14 +166,12 @@ export const AuthScreen: React.FC = () => {
       email: regEmail.trim(),
       password: regPassword,
       vehicleType: regVehicle,
+      city: regCity || 'Current Location, Bhopal',
     });
     setLoading(false);
 
     if (res.ok) {
-      showToast('Registration successful! Please login with your password.', 'success');
-      setIdentifier(cleanPhone);
-      setPassword(regPassword);
-      setMode('password');
+      showToast('Registration submitted! Proceeding to onboarding.', 'success');
     } else {
       setErrorMsg(res.error || 'Registration failed');
     }
@@ -427,7 +469,7 @@ export const AuthScreen: React.FC = () => {
                         type="text"
                         value={regName}
                         onChange={(e) => setRegName(e.target.value)}
-                        placeholder="e.g. Sumit Kumar"
+                        placeholder="Enter your name"
                         className="w-full bg-transparent text-xs text-slate-900 font-semibold outline-none placeholder:text-slate-400"
                         required
                       />
@@ -445,10 +487,37 @@ export const AuthScreen: React.FC = () => {
                         maxLength={10}
                         value={regPhone}
                         onChange={(e) => setRegPhone(e.target.value.replace(/\D/g, ''))}
-                        placeholder="10-digit mobile number"
+                        placeholder="Enter mobile number"
                         className="w-full bg-transparent text-xs text-slate-900 font-semibold outline-none placeholder:text-slate-400"
                         required
                       />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                      Current Area / Location
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 flex items-center rounded-xl bg-slate-50 border border-slate-200 px-3 py-2">
+                        <MapPin className="w-4 h-4 text-emerald-600 mr-2 shrink-0" />
+                        <input
+                          type="text"
+                          value={regCity}
+                          onChange={(e) => setRegCity(e.target.value)}
+                          placeholder="Fetch current location"
+                          className="w-full bg-transparent text-xs text-slate-900 font-semibold outline-none placeholder:text-slate-400"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleFetchLocation}
+                        disabled={isLocating}
+                        className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0"
+                      >
+                        <Navigation className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} />
+                        <span>{isLocating ? 'Locating...' : 'Fetch Location'}</span>
+                      </button>
                     </div>
                   </div>
 

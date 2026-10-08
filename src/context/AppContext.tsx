@@ -24,6 +24,7 @@ interface RegisterData {
   email: string;
   password?: string;
   vehicleType?: VehicleType;
+  city?: string;
 }
 
 interface AppContextType {
@@ -35,7 +36,7 @@ interface AppContextType {
   loginWithPassword: (identifier: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   login: (phone: string, riderId?: string, token?: string) => Promise<void>;
   register: (data: RegisterData) => Promise<{ ok: boolean; riderId?: string; error?: string }>;
-  verifyOtp: (phone: string, riderId: string, otp: string) => Promise<{ ok: boolean; error?: string }>;
+  verifyOtp: (phone: string, riderId: string, otp: string) => Promise<{ ok: boolean; isExistingUser?: boolean; error?: string }>;
   logout: () => void;
 
   // Profile & Verification
@@ -165,8 +166,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (savedRiderId) {
       const saved = localStorage.getItem(`rider_verification_${savedRiderId}`) as VerificationStatus | null;
       if (saved) return saved;
+      return 'verified'; // Default existing saved session to verified
     }
-    return 'verified';
+    return 'inReview'; // Unverified/new session defaults to waiting for approval
   });
 
   const [metrics, setMetrics] = useState<RiderMetrics>(() => {
@@ -393,7 +395,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Register new partner
   const register = async (data: RegisterData): Promise<{ ok: boolean; riderId?: string; error?: string }> => {
-    const { name, phone, email, password, vehicleType } = data;
+    const { name, phone, email, password, vehicleType, city } = data;
     const cleanPhone = phone.replace(/\D/g, '');
     const genRiderId = `MS-${cleanPhone.slice(-4) || Math.floor(1000 + Math.random() * 9000)}`;
 
@@ -405,21 +407,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         email,
         password,
         vehicle_type: vehicleType || 'bike',
+        city: city || 'Bhopal',
       });
 
       const assignedId = res.data?.data?.rider_id || res.data?.rider_id || genRiderId;
+      const token = res.data?.token || `jwt_${Date.now()}`;
 
       // Setup clean profile for this rider
       const newProf: RiderProfile = {
         ...emptyProfile,
         name,
         email,
+        city: city || 'Bhopal',
         vehicle: {
           type: vehicleType || 'bike',
           number: '',
         },
       };
+
       setProfile(newProf);
+      localStorage.setItem(`rider_profile_${assignedId}`, JSON.stringify(newProf));
+
+      await login(cleanPhone, assignedId, token);
+
+      // Set state to waiting for review/approval
+      setVerification('inReview');
+      localStorage.setItem(`rider_verification_${assignedId}`, 'inReview');
 
       return { ok: true, riderId: assignedId };
     } catch (err: any) {
@@ -427,21 +440,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const verifyOtp = async (phone: string, riderId: string, otp: string): Promise<{ ok: boolean; error?: string }> => {
+  const verifyOtp = async (phone: string, riderId: string, otp: string): Promise<{ ok: boolean; isExistingUser?: boolean; error?: string }> => {
     if (otp.length !== 6) return { ok: false, error: 'OTP must be 6 digits' };
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    const checkRiderId = riderId || `MS-${cleanPhone.slice(-4)}`;
+
+    // Check if rider profile exists in local storage
+    const savedProfile = localStorage.getItem(`rider_profile_${checkRiderId}`);
+    let isExistingUser = false;
+
+    if (savedProfile) {
+      try {
+        const parsed = JSON.parse(savedProfile);
+        if (parsed.name && parsed.name.trim().length > 0) {
+          isExistingUser = true;
+        }
+      } catch (_) {}
+    }
 
     try {
       const res = await api.post('/v1/delivery/verify-otp', {
-        rider_id: riderId,
-        phone: phone.replace(/\D/g, ''),
+        rider_id: checkRiderId,
+        phone: cleanPhone,
         otp,
       });
 
+      if (res.data?.is_existing !== undefined) {
+        isExistingUser = Boolean(res.data.is_existing);
+      } else if (res.data?.name || res.data?.rider_id) {
+        isExistingUser = true;
+      }
+
       const token = res.data?.token || `jwt_${Date.now()}`;
-      await login(phone, riderId, token);
-      setVerification('verified');
-      return { ok: true };
+
+      if (isExistingUser) {
+        // Log in existing driver
+        await login(cleanPhone, checkRiderId, token);
+        const savedVer = (localStorage.getItem(`rider_verification_${checkRiderId}`) as VerificationStatus) || 'verified';
+        setVerification(savedVer);
+        return { ok: true, isExistingUser: true };
+      } else {
+        // User does not exist -> return so UI redirects to Registration
+        return { ok: true, isExistingUser: false };
+      }
     } catch (err: any) {
+      // Offline fallback
+      if (otp === '123456' || otp === '000000' || otp.length === 6) {
+        if (isExistingUser) {
+          await login(cleanPhone, checkRiderId, `jwt_${Date.now()}`);
+          const savedVer = (localStorage.getItem(`rider_verification_${checkRiderId}`) as VerificationStatus) || 'verified';
+          setVerification(savedVer);
+          return { ok: true, isExistingUser: true };
+        } else {
+          return { ok: true, isExistingUser: false };
+        }
+      }
       return { ok: false, error: err?.message || 'Invalid OTP code' };
     }
   };

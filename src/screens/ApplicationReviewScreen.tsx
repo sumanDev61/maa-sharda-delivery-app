@@ -4,12 +4,17 @@ import { useApp } from '../context/AppContext';
 import { PrimaryButton } from '../components/PrimaryButton';
 
 export const ApplicationReviewScreen: React.FC = () => {
-  const { setBackgroundVerification, logout, profile } = useApp();
+  const { setBackgroundVerification, logout, profile, session } = useApp();
   const [checking, setChecking] = useState(false);
 
   const handleRefresh = async () => {
     setChecking(true);
     await new Promise((r) => setTimeout(r, 600));
+    // Re-check saved verification status for this rider
+    const saved = localStorage.getItem(`rider_verification_${session.riderId}`) || 'inReview';
+    if (saved === 'verified') {
+      setBackgroundVerification('verified');
+    }
     setChecking(false);
   };
 

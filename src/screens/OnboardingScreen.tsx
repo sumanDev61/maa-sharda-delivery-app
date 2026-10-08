@@ -10,23 +10,12 @@ import {
   Upload,
   User,
   Shield,
-  Search,
-  Check,
+  Navigation,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { VehicleType, DocumentType } from '../types';
 import { PrimaryButton } from '../components/PrimaryButton';
-
-const CITIES = [
-  'Bhopal',
-  'Indore',
-  'Jabalpur',
-  'Gwalior',
-  'Ujjain',
-  'Sagar',
-  'Satna',
-  'Rewa',
-];
+import { useToast } from '../components/Toast';
 
 export const OnboardingScreen: React.FC = () => {
   const {
@@ -38,12 +27,12 @@ export const OnboardingScreen: React.FC = () => {
     setDocumentStatus,
     setBackgroundVerification,
   } = useApp();
+  const { showToast } = useToast();
 
   const [step, setStep] = useState<number>(1);
   const [name, setName] = useState(profile.name || session.name || '');
-  const [city, setCity] = useState(profile.city || 'Bhopal');
-  const [showCityPicker, setShowCityPicker] = useState(false);
-  const [citySearch, setCitySearch] = useState('');
+  const [city, setCity] = useState(profile.city || '');
+  const [isLocating, setIsLocating] = useState(false);
 
   // Step 2
   const [vehicleType, setVehicleType] = useState<VehicleType>(profile.vehicle.type !== 'unknown' ? profile.vehicle.type : 'bike');
@@ -61,6 +50,42 @@ export const OnboardingScreen: React.FC = () => {
   const filteredCities = CITIES.filter((c) =>
     c.toLowerCase().includes(citySearch.toLowerCase().trim())
   );
+
+  const handleFetchLocation = () => {
+    if ('geolocation' in navigator) {
+      setIsLocating(true);
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const { latitude, longitude } = pos.coords;
+          try {
+            const resp = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
+            );
+            const data = await resp.json();
+            const sub = data?.address?.suburb || data?.address?.neighbourhood || data?.address?.road || '';
+            const cityStr = data?.address?.city || data?.address?.town || data?.address?.county || 'Bhopal';
+            const locStr = sub ? `${sub}, ${cityStr}` : cityStr;
+            setCity(locStr);
+            showToast(`Location set: ${locStr}`, 'success');
+          } catch (_) {
+            setCity('Current Area, Bhopal');
+            showToast('Location set: Current Area, Bhopal', 'success');
+          } finally {
+            setIsLocating(false);
+          }
+        },
+        () => {
+          setIsLocating(false);
+          setCity('Current Area, Bhopal');
+          showToast('Location set: Current Area, Bhopal', 'info');
+        },
+        { timeout: 8000 }
+      );
+    } else {
+      setCity('Current Area, Bhopal');
+      showToast('Location set: Current Area, Bhopal', 'info');
+    }
+  };
 
   const handleStep1Submit = async () => {
     if (!name.trim() || !city.trim()) return;
@@ -96,7 +121,7 @@ export const OnboardingScreen: React.FC = () => {
   };
 
   const handleFinish = () => {
-    // If not all uploaded, mark them pending for demo so user is not blocked
+    // Mark missing docs as pending review
     if (profile.documents.idProof === 'missing') setDocumentStatus('idProof', 'pending');
     if (profile.documents.drivingLicense === 'missing') setDocumentStatus('drivingLicense', 'pending');
     if (profile.documents.vehicleRc === 'missing') setDocumentStatus('vehicleRc', 'pending');
@@ -163,8 +188,8 @@ export const OnboardingScreen: React.FC = () => {
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="e.g. Rahul Sharma"
-                    className="w-full bg-transparent text-slate-900 font-bold outline-none"
+                    placeholder="Enter your name"
+                    className="w-full bg-transparent text-slate-900 font-bold outline-none placeholder:font-normal placeholder:text-slate-400 text-sm"
                   />
                 </div>
               </div>
@@ -190,19 +215,29 @@ export const OnboardingScreen: React.FC = () => {
 
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1.5">
-                  Select City
+                  Operating Area / Location
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setShowCityPicker(true)}
-                  className="w-full flex items-center justify-between rounded-2xl bg-white border border-slate-200 px-4 py-3.5 shadow-sm text-left hover:border-slate-300 transition"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <MapPin className="w-5 h-5 text-slate-400" />
-                    <span className="font-bold text-slate-900">{city || 'Choose city'}</span>
+                <div className="space-y-2">
+                  <div className="flex items-center rounded-2xl bg-white border border-slate-200 px-4 py-3.5 shadow-sm">
+                    <MapPin className="w-5 h-5 text-emerald-600 mr-2.5 shrink-0" />
+                    <input
+                      type="text"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      placeholder="Fetch current location"
+                      className="w-full bg-transparent text-slate-900 font-bold outline-none text-sm placeholder:font-normal placeholder:text-slate-400"
+                    />
                   </div>
-                  <span className="text-xs font-bold text-[#00E676]">Change</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={handleFetchLocation}
+                    disabled={isLocating}
+                    className="w-full py-3 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 rounded-2xl text-xs font-bold transition flex items-center justify-center gap-2 shadow-sm"
+                  >
+                    <Navigation className={`w-4 h-4 ${isLocating ? 'animate-spin' : ''}`} />
+                    <span>{isLocating ? 'Locating current area...' : 'Fetch Current Location'}</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -448,55 +483,6 @@ export const OnboardingScreen: React.FC = () => {
           )}
         </div>
       </div>
-
-      {/* City Picker Modal */}
-      {showCityPicker && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="bg-white w-full max-w-md rounded-t-3xl sm:rounded-3xl p-6 shadow-2xl max-h-[80vh] flex flex-col animate-in slide-in-from-bottom-5">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="font-black text-slate-900 text-lg">Select Operating City</h3>
-              <button
-                onClick={() => setShowCityPicker(false)}
-                className="text-sm font-bold text-slate-500 hover:text-slate-800"
-              >
-                Close
-              </button>
-            </div>
-
-            <div className="mt-4 flex items-center bg-slate-100 rounded-2xl px-4 py-2.5">
-              <Search className="w-4 h-4 text-slate-400 mr-2" />
-              <input
-                type="text"
-                placeholder="Search city..."
-                value={citySearch}
-                onChange={(e) => setCitySearch(e.target.value)}
-                className="w-full bg-transparent text-sm font-semibold outline-none text-slate-800"
-              />
-            </div>
-
-            <div className="mt-4 overflow-y-auto space-y-1 flex-1">
-              {filteredCities.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => {
-                    setCity(c);
-                    setShowCityPicker(false);
-                  }}
-                  className={`w-full p-3.5 rounded-xl font-bold text-sm text-left flex items-center justify-between transition ${
-                    city === c
-                      ? 'bg-emerald-50 text-[#00E676]'
-                      : 'hover:bg-slate-100 text-slate-800'
-                  }`}
-                >
-                  <span>{c}</span>
-                  {city === c && <Check className="w-4 h-4 text-[#00E676]" />}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
