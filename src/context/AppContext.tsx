@@ -35,6 +35,7 @@ interface AppContextType {
   isOnline: boolean;
   loginWithPassword: (identifier: string, password: string) => Promise<{ ok: boolean; error?: string }>;
   login: (phone: string, riderId?: string, token?: string) => Promise<void>;
+  requestOtp: (phone: string) => Promise<{ ok: boolean; riderId?: string; error?: string }>;
   register: (data: RegisterData) => Promise<{ ok: boolean; riderId?: string; error?: string }>;
   verifyOtp: (phone: string, riderId: string, otp: string) => Promise<{ ok: boolean; isExistingUser?: boolean; error?: string }>;
   logout: () => void;
@@ -379,6 +380,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Request OTP for login
+  const requestOtp = async (phone: string): Promise<{ ok: boolean; riderId?: string; error?: string }> => {
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      return { ok: false, error: 'Please enter a valid 10-digit mobile number' };
+    }
+    try {
+      const res = await api.post('/v1/delivery/login', { phone: cleanPhone });
+      if (!res.ok) {
+        return { ok: false, error: res.error || 'Rider account not found. Please register first.' };
+      }
+      const riderId = res.data?.data?.rider_id || res.data?.rider_id || `MS-${cleanPhone.slice(-4)}`;
+      return { ok: true, riderId };
+    } catch (err: any) {
+      return { ok: false, error: err?.message || 'Failed to request OTP' };
+    }
+  };
+
   // Login via token/phone
   const login = async (phone: string, riderId?: string, token?: string) => {
     const rid = riderId || `MS-${phone.slice(-4)}`;
@@ -397,7 +416,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const register = async (data: RegisterData): Promise<{ ok: boolean; riderId?: string; error?: string }> => {
     const { name, phone, email, password, vehicleType, city } = data;
     const cleanPhone = phone.replace(/\D/g, '');
-    const genRiderId = `MS-${cleanPhone.slice(-4) || Math.floor(1000 + Math.random() * 9000)}`;
 
     try {
       // Attempt backend registration
@@ -410,7 +428,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         city: city || 'Bhopal',
       });
 
-      const assignedId = res.data?.data?.rider_id || res.data?.rider_id || genRiderId;
+      if (!res.ok) {
+        return { ok: false, error: res.error || 'Registration failed. Phone or email may already be registered.' };
+      }
+
+      const assignedId = res.data?.data?.rider_id || res.data?.rider_id || `MS-${cleanPhone.slice(-4)}`;
       const token = res.data?.token || `jwt_${Date.now()}`;
 
       // Setup clean profile for this rider
@@ -446,19 +468,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const cleanPhone = phone.replace(/\D/g, '');
     const checkRiderId = riderId || `MS-${cleanPhone.slice(-4)}`;
 
-    // Check if rider profile exists in local storage
-    const savedProfile = localStorage.getItem(`rider_profile_${checkRiderId}`);
-    let isExistingUser = false;
-
-    if (savedProfile) {
-      try {
-        const parsed = JSON.parse(savedProfile);
-        if (parsed.name && parsed.name.trim().length > 0) {
-          isExistingUser = true;
-        }
-      } catch (_) {}
-    }
-
     try {
       const res = await api.post('/v1/delivery/verify-otp', {
         rider_id: checkRiderId,
@@ -466,36 +475,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         otp,
       });
 
-      if (res.data?.is_existing !== undefined) {
-        isExistingUser = Boolean(res.data.is_existing);
-      } else if (res.data?.name || res.data?.rider_id) {
-        isExistingUser = true;
+      if (!res.ok) {
+        return { ok: false, error: res.error || 'Invalid OTP code. Verification failed.' };
       }
 
       const token = res.data?.token || `jwt_${Date.now()}`;
+      const riderObj = res.data?.rider || {};
+      const actualRiderId = riderObj.id || checkRiderId;
+      const approvalStatus = riderObj.approval_status || 'inReview';
 
-      if (isExistingUser) {
-        // Log in existing driver
-        await login(cleanPhone, checkRiderId, token);
-        const savedVer = (localStorage.getItem(`rider_verification_${checkRiderId}`) as VerificationStatus) || 'verified';
-        setVerification(savedVer);
-        return { ok: true, isExistingUser: true };
-      } else {
-        // User does not exist -> return so UI redirects to Registration
-        return { ok: true, isExistingUser: false };
-      }
+      await login(cleanPhone, actualRiderId, token);
+      setVerification(approvalStatus as VerificationStatus);
+      localStorage.setItem(`rider_verification_${actualRiderId}`, approvalStatus);
+
+      return { ok: true, isExistingUser: true };
     } catch (err: any) {
-      // Offline fallback
-      if (otp === '123456' || otp === '000000' || otp.length === 6) {
-        if (isExistingUser) {
-          await login(cleanPhone, checkRiderId, `jwt_${Date.now()}`);
-          const savedVer = (localStorage.getItem(`rider_verification_${checkRiderId}`) as VerificationStatus) || 'verified';
-          setVerification(savedVer);
-          return { ok: true, isExistingUser: true };
-        } else {
-          return { ok: true, isExistingUser: false };
-        }
-      }
       return { ok: false, error: err?.message || 'Invalid OTP code' };
     }
   };
@@ -816,6 +810,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     isOnline,
     loginWithPassword,
     login,
+    requestOtp,
     register,
     verifyOtp,
     logout,

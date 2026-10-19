@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { CheckCircle2, Clock, LogOut, Sparkles } from 'lucide-react';
+import { CheckCircle2, Clock, LogOut } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { PrimaryButton } from '../components/PrimaryButton';
+import { api } from '../services/api';
 
 export const ApplicationReviewScreen: React.FC = () => {
   const { setBackgroundVerification, logout, profile, session } = useApp();
@@ -9,17 +10,26 @@ export const ApplicationReviewScreen: React.FC = () => {
 
   const handleRefresh = async () => {
     setChecking(true);
-    await new Promise((r) => setTimeout(r, 600));
-    // Re-check saved verification status for this rider
-    const saved = localStorage.getItem(`rider_verification_${session.riderId}`) || 'inReview';
-    if (saved === 'verified') {
-      setBackgroundVerification('verified');
+    try {
+      const res = await api.get('/v1/delivery/profile');
+      if (res.ok && res.data) {
+        const status = res.data.approval_status || 'inReview';
+        if (status === 'approved' || status === 'verified') {
+          setBackgroundVerification('verified');
+          localStorage.setItem(`rider_verification_${session.riderId}`, 'verified');
+        } else if (status === 'rejected') {
+          setBackgroundVerification('rejected');
+          localStorage.setItem(`rider_verification_${session.riderId}`, 'rejected');
+        }
+      }
+    } catch (_) {
+      const saved = localStorage.getItem(`rider_verification_${session.riderId}`) || 'inReview';
+      if (saved === 'verified' || saved === 'approved') {
+        setBackgroundVerification('verified');
+      }
+    } finally {
+      setChecking(false);
     }
-    setChecking(false);
-  };
-
-  const handleInstantApprove = () => {
-    setBackgroundVerification('verified');
   };
 
   return (
@@ -97,15 +107,6 @@ export const ApplicationReviewScreen: React.FC = () => {
           onClick={handleRefresh}
           isLoading={checking}
         />
-
-        {/* Fast-track button so reviewer can immediately enter app */}
-        <button
-          onClick={handleInstantApprove}
-          className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-[#00E676] font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition active:scale-[0.99]"
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>Approve & Enter Shift Dashboard</span>
-        </button>
 
         <button
           onClick={logout}

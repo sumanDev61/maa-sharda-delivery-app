@@ -8,7 +8,7 @@ import { VehicleType } from '../types';
 type AuthMode = 'password' | 'otp' | 'register';
 
 export const AuthScreen: React.FC = () => {
-  const { loginWithPassword, register, verifyOtp } = useApp();
+  const { loginWithPassword, requestOtp, register, verifyOtp } = useApp();
   const { showToast } = useToast();
 
   const [mode, setMode] = useState<AuthMode>('password');
@@ -71,11 +71,16 @@ export const AuthScreen: React.FC = () => {
     setErrorMsg('');
     setLoading(true);
 
-    const generatedRiderId = `MS-${cleanPhone.slice(-4)}`;
-    setRiderIdForOtp(generatedRiderId);
+    const res = await requestOtp(cleanPhone);
     setLoading(false);
-    setOtpSent(true);
-    showToast('6-digit OTP sent to +91 ' + cleanPhone, 'info');
+
+    if (res.ok && res.riderId) {
+      setRiderIdForOtp(res.riderId);
+      setOtpSent(true);
+      showToast('6-digit OTP sent to +91 ' + cleanPhone, 'info');
+    } else {
+      setErrorMsg(res.error || 'Mobile number not registered. Click "Register" tab to join as a partner.');
+    }
   };
 
   const handleVerifyOtp = async (e: React.FormEvent) => {

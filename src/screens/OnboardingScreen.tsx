@@ -47,10 +47,6 @@ export const OnboardingScreen: React.FC = () => {
   // Step 4
   const [uploadingDoc, setUploadingDoc] = useState<DocumentType | null>(null);
 
-  const filteredCities = CITIES.filter((c) =>
-    c.toLowerCase().includes(citySearch.toLowerCase().trim())
-  );
-
   const handleFetchLocation = () => {
     if ('geolocation' in navigator) {
       setIsLocating(true);
