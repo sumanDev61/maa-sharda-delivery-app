@@ -79,7 +79,7 @@ export const DeliveryFlowModal: React.FC = () => {
     const ok = await confirmPickupOtp(order.id, pickupOtp);
     setLoading(false);
     if (!ok) {
-      setErrorMsg(`Invalid Pickup OTP. (Hint: ${order.pickupOtp || '1234'})`);
+      setErrorMsg('Invalid pickup OTP. Ask the restaurant for the code shown on their order screen.');
       showToast('Invalid Pickup OTP! Check with merchant.', 'error');
     } else {
       setPickupOtp('');
@@ -102,7 +102,7 @@ export const DeliveryFlowModal: React.FC = () => {
     const ok = await confirmDeliveryOtp(order.id, deliveryOtp);
     setLoading(false);
     if (!ok) {
-      setErrorMsg(`Invalid Delivery OTP. (Hint: ${order.deliveryOtp || '5678'})`);
+      setErrorMsg('Invalid delivery OTP. Ask the customer for the 4-digit code in their app.');
       showToast('Invalid Delivery OTP! Ask customer for 4-digit code.', 'error');
     } else {
       setDeliveryOtp('');
@@ -242,7 +242,7 @@ export const DeliveryFlowModal: React.FC = () => {
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-bold text-xs text-slate-300">Enter Pickup OTP from Merchant</span>
                   <span className="text-[11px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-500/30">
-                    Hint: {order.pickupOtp || '1234'}
+                    Ask the restaurant for the pickup code
                   </span>
                 </div>
                 <input
@@ -309,7 +309,7 @@ export const DeliveryFlowModal: React.FC = () => {
                 <div className="flex items-center justify-between mb-2">
                   <span className="font-bold text-xs text-slate-300">Customer Delivery OTP</span>
                   <span className="text-[11px] font-bold text-emerald-400 bg-emerald-950/60 px-2 py-0.5 rounded-full border border-emerald-500/30">
-                    Hint: {order.deliveryOtp || '5678'}
+                    Ask the customer for their delivery code
                   </span>
                 </div>
                 <input

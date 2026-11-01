@@ -258,9 +258,21 @@ export const BankDetailsModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
   );
 };
 
+
+/** Opens the device file picker / camera and resolves with the chosen file (or null). */
+const pickFile = (accept = 'image/*,application/pdf'): Promise<File | null> =>
+  new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = accept;
+    input.onchange = () => resolve(input.files?.[0] || null);
+    input.click();
+  });
+
 export const DocumentsModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
-  const { profile, setDocumentStatus } = useApp();
+  const { profile, uploadDocument } = useApp();
   const [uploading, setUploading] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -270,11 +282,19 @@ export const DocumentsModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
     { type: 'vehicleRc' as DocumentType, label: 'Vehicle RC', status: profile.documents.vehicleRc },
   ];
 
+  // Upload sends the file for admin review (status becomes "pending"; only admin can verify).
   const handleUpload = async (type: DocumentType) => {
+    const file = await pickFile();
+    if (!file) return;
     setUploading(type);
-    await new Promise((r) => setTimeout(r, 600));
-    await setDocumentStatus(type, 'verified');
-    setUploading(null);
+    setUploadError(null);
+    try {
+      await uploadDocument(type, file);
+    } catch (err: any) {
+      setUploadError(err?.message || 'Upload failed');
+    } finally {
+      setUploading(null);
+    }
   };
 
   return (
@@ -288,6 +308,7 @@ export const DocumentsModal: React.FC<ModalProps> = ({ isOpen, onClose }) => {
         </div>
 
         <div className="mt-4 space-y-3">
+          {uploadError && <p className="text-xs text-red-600 font-bold">{uploadError}</p>}
           {docs.map((d) => (
             <div
               key={d.type}

@@ -16,6 +16,7 @@ import {
   X,
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { api } from '../services/api';
 import { OrderRequest } from '../types';
 import { useToast } from '../components/Toast';
 
@@ -37,6 +38,23 @@ export const HomeTab: React.FC = () => {
   const { showToast } = useToast();
   const [showSosDialog, setShowSosDialog] = useState(false);
   const [showRadarModal, setShowRadarModal] = useState(false);
+  const [gps, setGps] = useState<{ lat: number; lng: number; acc: number } | null>(null);
+  const [gpsError, setGpsError] = useState<string | null>(null);
+  const readGps = () => {
+    if (!('geolocation' in navigator)) {
+      setGpsError('GPS not available on this device');
+      return;
+    }
+    setGpsError(null);
+    navigator.geolocation.getCurrentPosition(
+      (p) => setGps({ lat: p.coords.latitude, lng: p.coords.longitude, acc: Math.round(p.coords.accuracy) }),
+      () => setGpsError('Location permission denied'),
+      { enableHighAccuracy: true, timeout: 15000 }
+    );
+  };
+  useEffect(() => {
+    if (showRadarModal) readGps();
+  }, [showRadarModal]);
 
   const handleToggleOnline = async () => {
     const next = !isOnline;
@@ -44,9 +62,16 @@ export const HomeTab: React.FC = () => {
     showToast(next ? 'Shift Online • Receiving nearby delivery requests.' : 'Shift Paused • You are offline.', next ? 'success' : 'info');
   };
 
-  const weekTripCount = trips.length;
-  const incentiveTarget = 12;
-  const incentiveProgress = Math.min(100, Math.round((weekTripCount / incentiveTarget) * 100));
+  const [incentive, setIncentive] = useState<{ week_target: number; week_completed: number; reward_amount: number } | null>(null);
+  const [zones, setZones] = useState<{ name: string; surge: number; pending_orders: number }[]>([]);
+  useEffect(() => {
+    api.get('/v1/delivery/incentives').then((r) => r.ok && setIncentive(r.data));
+    api.get('/v1/delivery/high-demand-areas').then((r) => r.ok && Array.isArray(r.data) && setZones(r.data));
+  }, [trips.length, isOnline]);
+  const weekTripCount = incentive?.week_completed ?? 0;
+  const incentiveTarget = incentive?.week_target || 0;
+  const incentiveReward = incentive?.reward_amount || 0;
+  const incentiveProgress = incentiveTarget ? Math.min(100, Math.round((weekTripCount / incentiveTarget) * 100)) : 0;
 
   const activeInFlight = activeOrders[0];
   const displayName = profile.name || session.name || session.username || 'Partner';
@@ -183,17 +208,17 @@ export const HomeTab: React.FC = () => {
 
           <div className="relative z-10 mt-2.5">
             <h3 className="text-sm font-extrabold text-white tracking-tight">
-              {profile.city || 'Bhopal'} Dispatch Zone
+              {profile.city || 'Your city'} Dispatch Zone
             </h3>
             <p className="text-[11px] text-slate-400 mt-0.5 font-medium leading-tight">
-              Auto-routing tuned for short pickup ETA across City Center & Sharda Nagar.
+              {zones.length ? `High demand near: ${zones.slice(0, 2).map((z) => z.name).join(', ')}` : 'Orders near you are shown first.'}
             </p>
           </div>
 
           <div className="relative z-10 mt-3 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-300">
             <span className="flex items-center gap-1">
               <Flame className="w-3 h-3 text-amber-400" />
-              <span>Surge active: <strong>+₹15/trip</strong></span>
+              <span>{zones.length ? <>Busy zones: <strong>{zones.length}</strong></> : 'No surge right now'}</span>
             </span>
             <button
               onClick={() => setShowSosDialog(true)}
@@ -210,7 +235,7 @@ export const HomeTab: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <h4 className="font-bold text-slate-900 text-xs">Weekly Shift Target</h4>
-              <p className="text-[10px] text-slate-400 font-medium">Earn ₹400 bonus payout</p>
+              <p className="text-[10px] text-slate-400 font-medium">Earn ₹{incentiveReward} bonus payout</p>
             </div>
             <span className="text-[11px] font-bold text-[#00E676] bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
               {weekTripCount} / {incentiveTarget} trips
@@ -226,7 +251,7 @@ export const HomeTab: React.FC = () => {
 
           <p className="text-[10px] text-slate-500 mt-1.5 font-medium">
             {weekTripCount >= incentiveTarget
-              ? '🎉 Target unlocked! ₹400 bonus added to your payouts.'
+              ? `🎉 Target reached! ₹${incentiveReward} bonus will be settled with your payout.`
               : `Complete ${incentiveTarget - weekTripCount} more deliveries this week to unlock incentive.`}
           </p>
         </div>
@@ -305,23 +330,22 @@ export const HomeTab: React.FC = () => {
             <div className="py-3 space-y-2 text-xs">
               <div className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-between">
                 <span className="text-slate-400 text-[11px]">GPS Coordinates</span>
-                <span className="text-white font-mono font-bold text-[11px]">23.2599° N, 77.4126° E</span>
+                <span className="text-white font-mono font-bold text-[11px]">
+                  {gps ? `${gps.lat.toFixed(4)}° N, ${gps.lng.toFixed(4)}° E` : gpsError || 'Reading GPS…'}
+                </span>
               </div>
               <div className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-between">
                 <span className="text-slate-400 text-[11px]">Zone</span>
-                <span className="text-white font-bold text-[11px]">{profile.city || 'Bhopal'} (Sector 2)</span>
+                <span className="text-white font-bold text-[11px]">{profile.city || '—'}</span>
               </div>
               <div className="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-between">
                 <span className="text-slate-400 text-[11px]">GPS Accuracy</span>
-                <span className="text-[#00E676] font-bold text-[11px]">± 4 meters (High)</span>
+                <span className="text-[#00E676] font-bold text-[11px]">{gps ? `± ${gps.acc} meters` : '—'}</span>
               </div>
             </div>
 
             <button
-              onClick={() => {
-                showToast('GPS recalibrated successfully', 'success');
-                setShowRadarModal(false);
-              }}
+              onClick={() => readGps()}
               className="w-full py-2 rounded-xl bg-[#00E676] hover:bg-[#00c864] text-slate-950 font-bold text-xs transition"
             >
               Recalibrate Location
@@ -339,7 +363,7 @@ export const HomeTab: React.FC = () => {
             </div>
             <h3 className="text-base font-bold text-slate-900">Emergency SOS</h3>
             <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-              Assistance will dispatch to your live GPS coordinates in {profile.city || 'Bhopal'}.
+              Call emergency services and share your live location with support.
             </p>
             <div className="mt-4 space-y-2">
               <a

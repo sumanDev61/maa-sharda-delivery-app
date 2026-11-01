@@ -2,31 +2,16 @@ import React, { useState } from 'react';
 import { CheckCircle2, Clock, LogOut } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { PrimaryButton } from '../components/PrimaryButton';
-import { api } from '../services/api';
 
 export const ApplicationReviewScreen: React.FC = () => {
-  const { setBackgroundVerification, logout, profile, session } = useApp();
+  const { refreshProfile, logout, profile, session } = useApp();
   const [checking, setChecking] = useState(false);
 
+  // Approval status is decided by admin and always read from the server.
   const handleRefresh = async () => {
     setChecking(true);
     try {
-      const res = await api.get('/v1/delivery/profile');
-      if (res.ok && res.data) {
-        const status = res.data.approval_status || 'inReview';
-        if (status === 'approved' || status === 'verified') {
-          setBackgroundVerification('verified');
-          localStorage.setItem(`rider_verification_${session.riderId}`, 'verified');
-        } else if (status === 'rejected') {
-          setBackgroundVerification('rejected');
-          localStorage.setItem(`rider_verification_${session.riderId}`, 'rejected');
-        }
-      }
-    } catch (_) {
-      const saved = localStorage.getItem(`rider_verification_${session.riderId}`) || 'inReview';
-      if (saved === 'verified' || saved === 'approved') {
-        setBackgroundVerification('verified');
-      }
+      await refreshProfile();
     } finally {
       setChecking(false);
     }

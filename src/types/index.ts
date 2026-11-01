@@ -22,7 +22,7 @@ export interface OrderItem {
 }
 
 export interface OrderRequest {
-  id: number;
+  id: string;
   restaurantName: string;
   restaurantArea: string;
   dropArea: string;
@@ -38,6 +38,14 @@ export interface OrderRequest {
   deliveryOtp: string;
   orderAmount: number;
   items: OrderItem[];
+  restaurantLat?: number | null;
+  restaurantLng?: number | null;
+  dropLat?: number | null;
+  dropLng?: number | null;
+  customerName?: string;
+  customerPhone?: string;
+  instructions?: string;
+  paymentMethod?: string;
 }
 
 export interface FareBreakdown {
@@ -50,7 +58,7 @@ export interface FareBreakdown {
 }
 
 export interface ActiveOrder {
-  id: number;
+  id: string;
   request: OrderRequest;
   progress: DeliveryProgress;
   pickupOtp: string;
@@ -60,7 +68,7 @@ export interface ActiveOrder {
 }
 
 export interface OrderHistoryItem {
-  orderId: number;
+  orderId: string;
   restaurantName: string;
   dropArea: string;
   status: OrderStatus;
@@ -71,7 +79,7 @@ export interface OrderHistoryItem {
 }
 
 export interface TripEarning {
-  orderId: number;
+  orderId: string;
   createdAt: string;
   baseFare: number;
   distanceFare: number;

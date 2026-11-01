@@ -17,6 +17,17 @@ import { VehicleType, DocumentType } from '../types';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { useToast } from '../components/Toast';
 
+
+/** Opens the device file picker / camera and resolves with the chosen file (or null). */
+const pickFile = (accept = 'image/*,application/pdf'): Promise<File | null> =>
+  new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = accept;
+    input.onchange = () => resolve(input.files?.[0] || null);
+    input.click();
+  });
+
 export const OnboardingScreen: React.FC = () => {
   const {
     profile,
@@ -25,6 +36,7 @@ export const OnboardingScreen: React.FC = () => {
     updateVehicle,
     updateBank,
     setDocumentStatus,
+    uploadDocument,
     setBackgroundVerification,
   } = useApp();
   const { showToast } = useToast();
@@ -59,27 +71,24 @@ export const OnboardingScreen: React.FC = () => {
             );
             const data = await resp.json();
             const sub = data?.address?.suburb || data?.address?.neighbourhood || data?.address?.road || '';
-            const cityStr = data?.address?.city || data?.address?.town || data?.address?.county || 'Bhopal';
+            const cityStr = data?.address?.city || data?.address?.town || data?.address?.county || '';
             const locStr = sub ? `${sub}, ${cityStr}` : cityStr;
             setCity(locStr);
             showToast(`Location set: ${locStr}`, 'success');
           } catch (_) {
-            setCity('Current Area, Bhopal');
-            showToast('Location set: Current Area, Bhopal', 'success');
+            showToast('Could not detect your city. Please type it.', 'info');
           } finally {
             setIsLocating(false);
           }
         },
         () => {
           setIsLocating(false);
-          setCity('Current Area, Bhopal');
-          showToast('Location set: Current Area, Bhopal', 'info');
+          showToast('Could not detect your city. Please type it.', 'info');
         },
         { timeout: 8000 }
       );
     } else {
-      setCity('Current Area, Bhopal');
-      showToast('Location set: Current Area, Bhopal', 'info');
+      showToast('Could not detect your city. Please type it.', 'info');
     }
   };
 
@@ -110,18 +119,26 @@ export const OnboardingScreen: React.FC = () => {
   };
 
   const handleDocUpload = async (docType: DocumentType) => {
+    const file = await pickFile();
+    if (!file) return;
     setUploadingDoc(docType);
-    await new Promise((r) => setTimeout(r, 600));
-    await setDocumentStatus(docType, 'pending');
-    setUploadingDoc(null);
+    try {
+      await uploadDocument(docType, file);
+      showToast('Document uploaded for review', 'success');
+    } catch (err: any) {
+      showToast(err?.message || 'Upload failed', 'error');
+    } finally {
+      setUploadingDoc(null);
+    }
   };
 
   const handleFinish = () => {
-    // Mark missing docs as pending review
-    if (profile.documents.idProof === 'missing') setDocumentStatus('idProof', 'pending');
-    if (profile.documents.drivingLicense === 'missing') setDocumentStatus('drivingLicense', 'pending');
-    if (profile.documents.vehicleRc === 'missing') setDocumentStatus('vehicleRc', 'pending');
-
+    const missing = (['idProof', 'drivingLicense', 'vehicleRc'] as DocumentType[]).filter((d) => profile.documents[d] === 'missing');
+    if (missing.length) {
+      showToast('Please upload all documents before submitting', 'error');
+      return;
+    }
+    // Approval happens in the admin panel; this just re-reads the status from the server.
     setBackgroundVerification('inReview');
   };
 

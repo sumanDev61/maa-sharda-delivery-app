@@ -312,7 +312,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onNavigateToTab }) => {
                 </div>
                 <div className="flex justify-between text-slate-400">
                   <span>Operating Zone</span>
-                  <strong className="text-white">{profile.city || 'Bhopal'}</strong>
+                  <strong className="text-white">{profile.city || 'Your city'}</strong>
                 </div>
               </div>
             </div>

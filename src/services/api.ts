@@ -67,9 +67,7 @@ export class ApiClient {
       'Content-Type': 'application/json',
       Accept: 'application/json',
     };
-    if (this.riderId) {
-      headers['x-rider-id'] = this.riderId;
-    }
+    // Identity comes only from the signed token (the old x-rider-id header is ignored by the server).
     if (this.token) {
       headers['Authorization'] = `Bearer ${this.token}`;
     }
@@ -86,6 +84,24 @@ export class ApiClient {
     } catch (err) {
       clearTimeout(id);
       throw err;
+    }
+  }
+
+  /** multipart upload (documents / photos) */
+  public async upload<T = any>(endpoint: string, file: File, fields: Record<string, string> = {}): Promise<ApiResponse<T>> {
+    const form = new FormData();
+    Object.entries(fields).forEach(([k, v]) => form.append(k, v));
+    form.append("image", file);
+    try {
+      const res = await fetch(`${this.baseUrl}${endpoint}`, {
+        method: "POST",
+        headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
+        body: form,
+      });
+      const data = await res.json().catch(() => null);
+      return { ok: res.ok, status: res.status, data, error: data?.message || data?.error };
+    } catch (err: any) {
+      return { ok: false, status: 0, error: err?.message || "Upload failed" };
     }
   }
 
@@ -147,3 +163,4 @@ export class ApiClient {
 }
 
 export const api = ApiClient.getInstance();
+

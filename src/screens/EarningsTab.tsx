@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { api } from '../services/api';
 import {
   Wallet,
   Truck,
@@ -17,19 +18,30 @@ export const EarningsTab: React.FC = () => {
   const { session, trips, todayTotal, weekTotal, profile } = useApp();
   const { showToast } = useToast();
 
-  const [selectedMonth, setSelectedMonth] = useState('October 2026');
+  const monthOptions = Array.from({ length: 3 }, (_, i) => {
+    const d = new Date();
+    d.setDate(1);
+    d.setMonth(d.getMonth() - i);
+    return { value: `${d.getFullYear()}-${d.getMonth()}`, label: d.toLocaleString('en-IN', { month: 'short', year: 'numeric' }) };
+  });
+  const [selectedMonth, setSelectedMonth] = useState(monthOptions[0].value);
+  const [incentive, setIncentive] = useState<{ week_target: number; week_completed: number; reward_amount: number } | null>(null);
+  useEffect(() => {
+    api.get('/v1/delivery/incentives').then((r) => r.ok && setIncentive(r.data));
+  }, [trips.length]);
   const [showAllTrips, setShowAllTrips] = useState(false);
   const [showCashOutModal, setShowCashOutModal] = useState(false);
   const [payoutSuccess, setPayoutSuccess] = useState(false);
   const [selectedDayIdx, setSelectedDayIdx] = useState<number>(() => (new Date().getDay() + 6) % 7);
 
+  // There is no instant cash-out API: payouts are settled by Maa Sharda to the bank account on file.
   const handleExecutePayout = () => {
-    if (todayTotal <= 0) {
-      showToast('Available balance is ₹0. Complete orders to earn.', 'error');
+    if (!profile.bank.accountNumber) {
+      showToast('Add your bank account in Profile to receive payouts.', 'error');
       return;
     }
-    setPayoutSuccess(true);
-    showToast(`₹${todayTotal.toFixed(0)} sent to ${profile.bank.holderName || profile.name || 'bank'} via IMPS`, 'success');
+    showToast('Payouts are settled to your bank account by the Maa Sharda team. Contact support for payout status.', 'info');
+    setShowCashOutModal(false);
   };
 
   // Week breakdown (Mon - Sun)
@@ -38,8 +50,13 @@ export const EarningsTab: React.FC = () => {
 
   const weekBars = daysOfWeek.map((day, idx) => {
     const isToday = idx === todayDayIdx;
-    let val = isToday ? todayTotal : Math.max(0, (weekTotal / 5) * (0.6 + (idx % 3) * 0.28));
-    if (idx > todayDayIdx) val = 0; // future days
+    // Real per-day totals for the current week (Mon..Sun)
+    const dayDate = new Date();
+    dayDate.setHours(0, 0, 0, 0);
+    dayDate.setDate(dayDate.getDate() - todayDayIdx + idx);
+    const val = trips
+      .filter((t) => new Date(t.createdAt).toDateString() === dayDate.toDateString())
+      .reduce((s, t) => s + t.total, 0);
     return {
       label: day,
       value: val,
@@ -55,9 +72,9 @@ export const EarningsTab: React.FC = () => {
   const todayTrips = trips.filter(
     (t) => new Date(t.createdAt).toDateString() === new Date().toDateString()
   );
-  const basePayTotal = todayTrips.reduce((s, t) => s + t.baseFare + t.distanceFare, 0) || Math.round(todayTotal * 0.7);
-  const tipsTotal = todayTrips.reduce((s, t) => s + t.tips, 0) || Math.round(todayTotal * 0.12);
-  const incentivesTotal = todayTrips.reduce((s, t) => s + t.incentive + t.surge, 0) || Math.round(todayTotal * 0.18);
+  const basePayTotal = todayTrips.reduce((s, t) => s + t.baseFare + t.distanceFare, 0);
+  const tipsTotal = todayTrips.reduce((s, t) => s + t.tips, 0);
+  const incentivesTotal = todayTrips.reduce((s, t) => s + t.incentive + t.surge, 0);
   const codCashPending = trips.filter((t) => t.isCod).reduce((s, t) => s + t.cashCollected, 0);
 
   const formatTripTime = (iso: string) => {
@@ -84,9 +101,9 @@ export const EarningsTab: React.FC = () => {
           onChange={(e) => setSelectedMonth(e.target.value)}
           className="bg-slate-900 text-[10px] text-slate-300 font-bold border border-white/10 rounded-lg px-2 py-1 outline-none cursor-pointer"
         >
-          <option value="October 2026">Oct 2026</option>
-          <option value="September 2026">Sep 2026</option>
-          <option value="August 2026">Aug 2026</option>
+          {monthOptions.map((m) => (
+            <option key={m.value} value={m.value}>{m.label}</option>
+          ))}
         </select>
       </header>
 
@@ -201,7 +218,9 @@ export const EarningsTab: React.FC = () => {
               <span className="text-[10px] font-bold text-slate-400 flex items-center gap-1">
                 <TrendingUp className="w-3 h-3 text-[#00E676]" /> Target Bonus
               </span>
-              <p className="text-base font-extrabold text-[#00E676] mt-1">₹ 400</p>
+              <p className="text-base font-extrabold text-[#00E676] mt-1">
+                {incentive ? `₹ ${incentive.reward_amount} @ ${incentive.week_completed}/${incentive.week_target}` : '—'}
+              </p>
             </div>
           </div>
         </div>
@@ -250,7 +269,7 @@ export const EarningsTab: React.FC = () => {
                     </div>
                     <div>
                       <h4 className="font-bold text-white text-xs">
-                        {trip.orderId === 0 ? 'Delivery Trip' : `Order #${trip.orderId}`}
+                        {!trip.orderId ? 'Delivery Trip' : `Order #${String(trip.orderId).slice(-6)}`}
                       </h4>
                       <span className="text-[10px] text-slate-400">
                         {formatTripTime(trip.createdAt)} • {trip.isCod ? 'COD collected' : 'Prepaid'}

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   ActiveOrder,
   DeliveryProgress,
@@ -50,8 +50,9 @@ interface AppContextType {
   setDocumentStatus: (type: DocumentType, status: DocumentStatus) => Promise<void>;
   uploadDocument: (type: DocumentType, fileData: string | File) => Promise<void>;
   setBackgroundVerification: (status: VerificationStatus) => void;
+  refreshProfile: () => Promise<void>;
 
-  // Attendance
+  // Attendance (local check-in diary)
   checkedInDays: string[];
   toggleAttendanceForToday: () => boolean;
 
@@ -60,13 +61,13 @@ interface AppContextType {
   activeOrders: ActiveOrder[];
   orderHistory: OrderHistoryItem[];
   fetchAvailableOrders: () => Promise<void>;
-  acceptOrder: (requestId: number) => Promise<boolean>;
-  rejectOrder: (requestId: number, reason?: string) => Promise<void>;
-  markReachedRestaurant: (orderId: number) => Promise<void>;
-  confirmPickupOtp: (orderId: number, otp: string) => Promise<boolean>;
-  markArrivedCustomer: (orderId: number) => Promise<void>;
-  confirmDeliveryOtp: (orderId: number, otp: string) => Promise<boolean>;
-  completeOrder: (orderId: number) => Promise<void>;
+  acceptOrder: (requestId: string) => Promise<boolean>;
+  rejectOrder: (requestId: string, reason?: string) => Promise<void>;
+  markReachedRestaurant: (orderId: string) => Promise<void>;
+  confirmPickupOtp: (orderId: string, otp: string) => Promise<boolean>;
+  markArrivedCustomer: (orderId: string) => Promise<void>;
+  confirmDeliveryOtp: (orderId: string, otp: string) => Promise<boolean>;
+  completeOrder: (orderId: string) => Promise<void>;
   activeDeliveryOrder: ActiveOrder | null;
   setActiveDeliveryOrder: (order: ActiveOrder | null) => void;
 
@@ -89,719 +90,595 @@ const emptyProfile: RiderProfile = {
   name: '',
   email: '',
   address: '',
-  city: 'Bhopal',
-  vehicle: {
-    type: 'bike',
-    number: '',
-  },
-  bank: {
-    holderName: '',
-    accountNumber: '',
-    ifsc: '',
-  },
-  documents: {
-    idProof: 'missing',
-    drivingLicense: 'missing',
-    vehicleRc: 'missing',
-  },
+  city: '',
+  vehicle: { type: 'unknown', number: '' },
+  bank: { holderName: '', accountNumber: '', ifsc: '' },
+  documents: { idProof: 'missing', drivingLicense: 'missing', vehicleRc: 'missing' },
   drivingLicenseNumber: '',
   photoPath: '',
 };
 
-// Generate realistic city order for active shift testing
-function calculateFare(req: OrderRequest): FareBreakdown {
-  const baseFare = 25;
-  const distanceFare = Math.round(req.totalDistanceKm * 10);
-  const surge = req.expectedEarning > 60 ? 15 : 0;
-  const tips = Math.random() > 0.6 ? 10 : 0;
-  const incentive = 5;
-  const total = baseFare + distanceFare + surge + tips + incentive;
-  return { baseFare, distanceFare, surge, tips, incentive, total };
-}
+// App document names <-> backend document keys
+const DOC_KEY: Record<DocumentType, string> = { idProof: 'aadhar', drivingLicense: 'license', vehicleRc: 'rc' };
+const mapDocStatus = (s: string): DocumentStatus =>
+  s === 'approved' || s === 'verified' ? 'verified' : s === 'rejected' ? 'rejected' : s === 'pending' ? 'pending' : 'missing';
+const mapApproval = (s: string): VerificationStatus =>
+  s === 'approved' ? 'verified' : s === 'rejected' || s === 'suspended' ? 'rejected' : 'inReview';
+
+const ACTIVE_STATUSES = ['DRIVER_ASSIGNED', 'DRIVER_ARRIVED_AT_MERCHANT', 'PICKED_UP', 'EN_ROUTE_TO_CUSTOMER', 'ARRIVED_AT_CUSTOMER'];
+const progressFor = (status: string): DeliveryProgress => {
+  switch (status) {
+    case 'DRIVER_ARRIVED_AT_MERCHANT':
+      return 'reachedRestaurant';
+    case 'PICKED_UP':
+      return 'pickedUp';
+    case 'EN_ROUTE_TO_CUSTOMER':
+      return 'navigateCustomer';
+    case 'ARRIVED_AT_CUSTOMER':
+      return 'arrivedCustomer';
+    case 'DELIVERED':
+      return 'delivered';
+    default:
+      return 'navigateRestaurant';
+  }
+};
+
+const fareFrom = (o: any): FareBreakdown => {
+  const b = o.earning_breakdown || {};
+  return {
+    baseFare: Number(b.base_pay || 0),
+    distanceFare: Number(b.distance_pay || 0),
+    surge: Number(b.surge || 0),
+    tips: Number(b.tips || 0),
+    incentive: Number(b.incentive || 0),
+    total: Number(o.earning ?? b.total ?? 0),
+  };
+};
+
+const formatAddress = (a: any) =>
+  a ? [a.full_address, a.city, a.pincode].filter(Boolean).join(', ') : '';
+
+/** Backend order -> rider app request (pool view or assigned view). */
+const mapRequest = (o: any): OrderRequest => ({
+  id: String(o.id),
+  restaurantName: o.restaurant_name || o.restaurant || '',
+  restaurantArea: o.restaurant_address || '',
+  dropArea: o.delivery_address ? formatAddress(o.delivery_address) : o.drop_area || '',
+  pickupDistanceKm: Number(o.pickup_distance_km ?? 0),
+  deliveryDistanceKm: Number(o.delivery_distance_km ?? 0),
+  totalDistanceKm: Number(o.total_distance_km ?? o.delivery_distance_km ?? 0),
+  etaMin: Number(o.eta_minutes ?? 0),
+  expectedEarning: Number(o.earning ?? 0),
+  cashToCollect: Number(o.cash_to_collect ?? 0),
+  createdAt: o.created_at || new Date().toISOString(),
+  expiresAt: new Date(Date.now() + 5 * 60000).toISOString(),
+  pickupOtp: '', // OTPs are never sent to the rider app; they are verified on the server
+  deliveryOtp: '',
+  orderAmount: Number(o.amount ?? 0),
+  items: Array.isArray(o.items) ? o.items.map((it: any) => ({ name: it.name, quantity: it.quantity })) : [],
+  restaurantLat: o.restaurant_lat ?? null,
+  restaurantLng: o.restaurant_lng ?? null,
+  customerName: o.customer_name || '',
+  customerPhone: o.customer_phone || '',
+  dropLat: o.delivery_address?.lat ?? null,
+  dropLng: o.delivery_address?.lng ?? null,
+  instructions: o.instructions || '',
+  paymentMethod: o.payment_method || '',
+});
+
+const mapActive = (o: any): ActiveOrder => {
+  const req = mapRequest(o);
+  return {
+    id: req.id,
+    request: req,
+    progress: progressFor(o.status),
+    pickupOtp: '',
+    deliveryOtp: '',
+    fareBreakdown: fareFrom(o),
+    cashToCollect: req.cashToCollect,
+  };
+};
 
 const AppContext = createContext<AppContextType | null>(null);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { showToast } = useToast();
 
-  // Session: Check if an actual authenticated session exists
+  // Session: only a server-issued token counts as logged in
   const [session, setSession] = useState<RiderSession>(() => {
     const savedToken = localStorage.getItem('rider_token');
     const savedRiderId = localStorage.getItem('rider_id');
-    const savedPhone = localStorage.getItem('rider_phone') || '';
-    const savedUsername = localStorage.getItem('rider_username') || '';
-    const savedName = localStorage.getItem('rider_name') || '';
-
-    // Strictly authenticated only if token and riderId exist
     if (savedToken && savedRiderId) {
       return {
         isLoggedIn: true,
-        phone: savedPhone,
+        phone: localStorage.getItem('rider_phone') || '',
         riderId: savedRiderId,
-        username: savedUsername,
-        name: savedName,
+        username: localStorage.getItem('rider_username') || '',
+        name: localStorage.getItem('rider_name') || '',
         token: savedToken,
       };
     }
     return { isLoggedIn: false, phone: '' };
   });
 
-  const currentRiderId = session.riderId || 'guest';
+  const [profile, setProfile] = useState<RiderProfile>(emptyProfile);
+  const [verification, setVerification] = useState<VerificationStatus>('inReview');
+  const [serverRating, setServerRating] = useState(0);
+  const [serverDeliveries, setServerDeliveries] = useState(0);
+  const [isOnline, setIsOnline] = useState<boolean>(false);
 
-  // Profile: user-scoped
-  const [profile, setProfile] = useState<RiderProfile>(() => {
-    const savedRiderId = localStorage.getItem('rider_id');
-    if (savedRiderId) {
-      const saved = localStorage.getItem(`rider_profile_${savedRiderId}`);
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch (_) {}
-      }
-    }
-    return emptyProfile;
-  });
-
-  const [verification, setVerification] = useState<VerificationStatus>(() => {
-    const savedRiderId = localStorage.getItem('rider_id');
-    if (savedRiderId) {
-      const saved = localStorage.getItem(`rider_verification_${savedRiderId}`) as VerificationStatus | null;
-      if (saved) return saved;
-      return 'verified'; // Default existing saved session to verified
-    }
-    return 'inReview'; // Unverified/new session defaults to waiting for approval
-  });
-
-  const [metrics, setMetrics] = useState<RiderMetrics>(() => {
-    const savedRiderId = localStorage.getItem('rider_id');
-    if (savedRiderId) {
-      const saved = localStorage.getItem(`rider_metrics_${savedRiderId}`);
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch (_) {}
-      }
-    }
-    return {
-      rating: 4.9,
-      acceptanceRate: 0.95,
-      completionRate: 0.98,
-      completedTrips: 0,
-    };
-  });
-
-  // Online status
-  const [isOnline, setIsOnline] = useState<boolean>(() => {
-    const saved = localStorage.getItem('rider_online');
-    return saved !== null ? saved === 'true' : true;
-  });
-
-  // Attendance
   const [checkedInDays, setCheckedInDays] = useState<string[]>(() => {
-    const savedRiderId = localStorage.getItem('rider_id');
-    if (savedRiderId) {
-      const saved = localStorage.getItem(`rider_attendance_${savedRiderId}`);
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch (_) {}
-      }
+    const rid = localStorage.getItem('rider_id');
+    try {
+      return rid ? JSON.parse(localStorage.getItem(`rider_attendance_${rid}`) || '[]') : [];
+    } catch {
+      return [];
     }
-    const today = new Date().toISOString().split('T')[0];
-    return [today];
   });
 
-  // Settings
   const [settings, setSettings] = useState<SettingsState>(() => {
-    const saved = localStorage.getItem('rider_settings');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (_) {}
-    }
+    try {
+      const saved = localStorage.getItem('rider_settings');
+      if (saved) return JSON.parse(saved);
+    } catch {}
     return {
       orderAlertsEnabled: true,
       soundEnabled: true,
       vibrationEnabled: true,
-      shareLiveLocationEnabled: false,
+      shareLiveLocationEnabled: true,
       weatherAlertsEnabled: true,
       language: 'English',
     };
   });
 
-  // Orders
   const [requests, setRequests] = useState<OrderRequest[]>([]);
   const [activeOrders, setActiveOrders] = useState<ActiveOrder[]>([]);
-  const [orderHistory, setOrderHistory] = useState<OrderHistoryItem[]>(() => {
-    const savedRiderId = localStorage.getItem('rider_id');
-    if (savedRiderId) {
-      const saved = localStorage.getItem(`rider_history_${savedRiderId}`);
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch (_) {}
-      }
-    }
-    return [];
-  });
-
-  // Selected order for active delivery flow modal
+  const [orderHistory, setOrderHistory] = useState<OrderHistoryItem[]>([]);
   const [activeDeliveryOrder, setActiveDeliveryOrder] = useState<ActiveOrder | null>(null);
-
-  // Trips & Earnings: strictly user-scoped
-  const [trips, setTrips] = useState<TripEarning[]>(() => {
-    const savedRiderId = localStorage.getItem('rider_id');
-    if (savedRiderId) {
-      const saved = localStorage.getItem(`rider_trips_${savedRiderId}`);
-      if (saved) {
-        try {
-          return JSON.parse(saved);
-        } catch (_) {}
-      }
-    }
-    return [];
-  });
-
-  // Persist user-scoped state
-  useEffect(() => {
-    if (session.riderId) {
-      localStorage.setItem(`rider_profile_${session.riderId}`, JSON.stringify(profile));
-    }
-  }, [profile, session.riderId]);
+  const [trips, setTrips] = useState<TripEarning[]>([]);
+  const [declined, setDeclined] = useState(0);
 
   useEffect(() => {
-    if (session.riderId) {
-      localStorage.setItem(`rider_verification_${session.riderId}`, verification);
-    }
-  }, [verification, session.riderId]);
-
-  useEffect(() => {
-    if (session.riderId) {
-      localStorage.setItem(`rider_metrics_${session.riderId}`, JSON.stringify(metrics));
-    }
-  }, [metrics, session.riderId]);
-
-  useEffect(() => {
-    localStorage.setItem('rider_online', String(isOnline));
-  }, [isOnline]);
-
-  useEffect(() => {
-    if (session.riderId) {
-      localStorage.setItem(`rider_attendance_${session.riderId}`, JSON.stringify(checkedInDays));
-    }
+    if (session.riderId) localStorage.setItem(`rider_attendance_${session.riderId}`, JSON.stringify(checkedInDays));
   }, [checkedInDays, session.riderId]);
 
   useEffect(() => {
     localStorage.setItem('rider_settings', JSON.stringify(settings));
   }, [settings]);
 
-  useEffect(() => {
-    if (session.riderId) {
-      localStorage.setItem(`rider_history_${session.riderId}`, JSON.stringify(orderHistory));
-    }
-  }, [orderHistory, session.riderId]);
+  // ── Server sync ──
 
-  useEffect(() => {
-    if (session.riderId) {
-      localStorage.setItem(`rider_trips_${session.riderId}`, JSON.stringify(trips));
-    }
-  }, [trips, session.riderId]);
+  const handleUnauthorized = useCallback(
+    (status: number) => {
+      if (status === 401 && session.isLoggedIn) {
+        api.clearSession();
+        setSession({ isLoggedIn: false, phone: '' });
+        showToast('Session expired. Please login again.', 'error');
+        return true;
+      }
+      return false;
+    },
+    [session.isLoggedIn, showToast]
+  );
 
-  // If online, fetch available orders from API
-  useEffect(() => {
-    if (!session.isLoggedIn || !isOnline) {
+  const refreshProfile = useCallback(async () => {
+    const res = await api.get('/v1/delivery/profile');
+    if (!res.ok) {
+      handleUnauthorized(res.status);
+      return;
+    }
+    const p = res.data || {};
+    setProfile({
+      name: p.general?.name || '',
+      email: p.general?.email || '',
+      address: p.general?.address || '',
+      city: p.general?.city || '',
+      vehicle: { type: (p.vehicle?.type as VehicleType) || 'unknown', number: p.vehicle?.number || '' },
+      bank: { holderName: p.bank?.account_name || '', accountNumber: p.bank?.account_number || '', ifsc: p.bank?.ifsc || '' },
+      documents: {
+        idProof: mapDocStatus(p.documents?.aadhar),
+        drivingLicense: mapDocStatus(p.documents?.license),
+        vehicleRc: mapDocStatus(p.documents?.rc),
+      },
+      drivingLicenseNumber: p.vehicle?.driving_license_number || '',
+      photoPath: p.general?.photo_url || '',
+    });
+    setVerification(mapApproval(p.approval_status));
+    setIsOnline(Boolean(p.is_online));
+    setServerRating(Number(p.rating || 0));
+    setServerDeliveries(Number(p.deliveries || 0));
+  }, [handleUnauthorized]);
+
+  const refreshMyOrders = useCallback(async () => {
+    const res = await api.get('/v1/delivery/orders/my-orders');
+    if (!res.ok || !Array.isArray(res.data)) {
+      handleUnauthorized(res.status);
+      return;
+    }
+    const active = res.data.filter((o: any) => ACTIVE_STATUSES.includes(o.status)).map(mapActive);
+    setActiveOrders(active);
+    setActiveDeliveryOrder((cur) => (cur ? active.find((a) => a.id === cur.id) || null : cur));
+    setOrderHistory(
+      res.data
+        .filter((o: any) => !ACTIVE_STATUSES.includes(o.status))
+        .map((o: any) => ({
+          orderId: String(o.id),
+          restaurantName: o.restaurant_name || '',
+          dropArea: o.delivery_address ? formatAddress(o.delivery_address) : '',
+          status: o.status === 'DELIVERED' ? 'delivered' : 'rejected',
+          completedAt: o.delivered_at || o.updated_at || o.created_at,
+          earning: o.status === 'DELIVERED' ? Number(o.earning || 0) : 0,
+          cashCollected: o.status === 'DELIVERED' ? Number(o.cash_to_collect || 0) : 0,
+          note:
+            o.status === 'DELIVERED'
+              ? o.payment_method === 'COD'
+                ? `COD cash collected: ₹${o.cash_to_collect || 0}`
+                : 'Prepaid online order'
+              : String(o.status || '').replace(/_/g, ' ').toLowerCase(),
+        }))
+    );
+  }, [handleUnauthorized]);
+
+  const refreshEarnings = useCallback(async () => {
+    const res = await api.get('/v1/delivery/trips');
+    if (!res.ok || !Array.isArray(res.data)) return;
+    setTrips(
+      res.data.map((t: any) => ({
+        orderId: String(t.order_id),
+        createdAt: t.created_at,
+        baseFare: Number(t.base_pay || 0),
+        distanceFare: Number(t.distance_pay || 0),
+        surge: Number(t.surge || 0),
+        tips: Number(t.tips || 0),
+        incentive: Number(t.incentive || 0),
+        isCod: Number(t.cash_collected || 0) > 0,
+        cashCollected: Number(t.cash_collected || 0),
+        total: Number(t.amount || 0),
+      }))
+    );
+  }, []);
+
+  const fetchAvailableOrders = useCallback(async () => {
+    if (!session.isLoggedIn || !isOnline || verification !== 'verified') {
       setRequests([]);
       return;
     }
+    const res = await api.get('/v1/delivery/orders/available');
+    if (res.ok && Array.isArray(res.data)) setRequests(res.data.map(mapRequest));
+    else {
+      handleUnauthorized(res.status);
+      setRequests([]);
+    }
+  }, [session.isLoggedIn, isOnline, verification, handleUnauthorized]);
 
+  // Initial load after login
+  useEffect(() => {
+    if (!session.isLoggedIn) return;
+    refreshProfile();
+    refreshMyOrders();
+    refreshEarnings();
+  }, [session.isLoggedIn, refreshProfile, refreshMyOrders, refreshEarnings]);
+
+  // Pool: live via SSE, with a slow polling fallback
+  useEffect(() => {
+    if (!session.isLoggedIn) return;
     fetchAvailableOrders();
-  }, [session.isLoggedIn, isOnline]);
+    const poll = setInterval(() => {
+      fetchAvailableOrders();
+      refreshMyOrders();
+    }, 20000);
+    let es: EventSource | null = null;
+    const token = api.getToken();
+    if (token && typeof EventSource !== 'undefined') {
+      try {
+        es = new EventSource(`${api.baseUrl}/v1/sse/delivery?token=${encodeURIComponent(token)}`);
+        es.addEventListener('pool', () => fetchAvailableOrders());
+        es.addEventListener('order', () => refreshMyOrders());
+      } catch {}
+    }
+    return () => {
+      clearInterval(poll);
+      es?.close();
+    };
+  }, [session.isLoggedIn, fetchAvailableOrders, refreshMyOrders]);
 
-  const isOnboardingComplete = useMemo(() => {
-    return (
-      profile.name.trim().length > 0 &&
-      profile.city.trim().length > 0 &&
-      profile.vehicle.type !== 'unknown'
+  // Live location: sent while online (needed for dispatch radius and customer tracking)
+  const lastSentRef = useRef(0);
+  useEffect(() => {
+    if (!session.isLoggedIn || !isOnline || !settings.shareLiveLocationEnabled || !('geolocation' in navigator)) return;
+    const id = navigator.geolocation.watchPosition(
+      (pos) => {
+        const now = Date.now();
+        if (now - lastSentRef.current < 15000) return;
+        lastSentRef.current = now;
+        api.put('/v1/delivery/location', { lat: pos.coords.latitude, lng: pos.coords.longitude });
+      },
+      () => showToast('Location permission is needed to receive nearby orders.', 'error'),
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
     );
-  }, [profile]);
+    return () => navigator.geolocation.clearWatch(id);
+  }, [session.isLoggedIn, isOnline, settings.shareLiveLocationEnabled, showToast]);
 
-  // Direct login with User ID / Phone and Password
-  const loginWithPassword = async (identifier: string, password: string): Promise<{ ok: boolean; error?: string }> => {
-    const cleanId = identifier.trim();
-    if (!cleanId) {
-      return { ok: false, error: 'Please enter User ID or Mobile number' };
+  const isOnboardingComplete = useMemo(
+    () => profile.name.trim().length > 0 && profile.city.trim().length > 0 && profile.vehicle.type !== 'unknown',
+    [profile]
+  );
+
+  // ── Auth ──
+
+  // Riders authenticate with mobile OTP only; there is no password stored on the server.
+  const loginWithPassword = async (): Promise<{ ok: boolean; error?: string }> => ({
+    ok: false,
+    error: 'Password login is not available. Please use Mobile OTP.',
+  });
+
+  const login = async (phone: string, riderId?: string, token?: string) => {
+    if (!riderId || !token) {
+      showToast('Login failed: missing server session.', 'error');
+      return;
     }
-    if (!password || password.trim().length < 4) {
-      return { ok: false, error: 'Please enter a valid password (min 4 characters)' };
-    }
-
-    // Attempt real API call to Render backend
-    try {
-      const res = await api.post('/v1/delivery/login', {
-        username: cleanId,
-        phone: cleanId.replace(/\D/g, ''),
-        rider_id: cleanId,
-        password: password.trim(),
-      });
-
-      if (res.ok && res.data) {
-        const token = res.data.token || res.data.data?.token || `token_${Date.now()}`;
-        const riderId = res.data.rider_id || res.data.data?.rider_id || cleanId;
-        const riderName = res.data.name || res.data.data?.name || cleanId;
-        const phone = res.data.phone || res.data.data?.phone || cleanId.replace(/\D/g, '');
-
-        api.setAuthSession(token, riderId);
-        localStorage.setItem('rider_phone', phone);
-        localStorage.setItem('rider_username', cleanId);
-        localStorage.setItem('rider_name', riderName);
-
-        setSession({
-          isLoggedIn: true,
-          phone,
-          username: cleanId,
-          name: riderName,
-          riderId,
-          token,
-        });
-
-        // Load or initialize rider profile
-        setProfile((prev) => ({
-          ...prev,
-          name: riderName,
-          email: res.data?.email || prev.email,
-        }));
-
-        return { ok: true };
-      }
-
-      return { ok: false, error: res.error || 'Authentication failed. Invalid credentials.' };
-    } catch (err: any) {
-      return { ok: false, error: err?.message || 'Login request failed. Server offline or unreachable.' };
-    }
+    api.setAuthSession(token, riderId);
+    localStorage.setItem('rider_phone', phone);
+    setSession({ isLoggedIn: true, phone, riderId, token });
   };
 
-  // Request OTP for login
   const requestOtp = async (phone: string): Promise<{ ok: boolean; riderId?: string; error?: string }> => {
     const cleanPhone = phone.replace(/\D/g, '');
-    if (cleanPhone.length !== 10) {
-      return { ok: false, error: 'Please enter a valid 10-digit mobile number' };
-    }
-    try {
-      const res = await api.post('/v1/delivery/login', { phone: cleanPhone });
-      if (!res.ok) {
-        return { ok: false, error: res.error || 'Rider account not found. Please register first.' };
-      }
-      const riderId = res.data?.data?.rider_id || res.data?.rider_id || `MS-${cleanPhone.slice(-4)}`;
-      return { ok: true, riderId };
-    } catch (err: any) {
-      return { ok: false, error: err?.message || 'Failed to request OTP' };
-    }
+    if (cleanPhone.length !== 10) return { ok: false, error: 'Please enter a valid 10-digit mobile number' };
+    const res = await api.post('/v1/delivery/login', { phone: cleanPhone });
+    if (!res.ok) return { ok: false, error: res.error || 'Rider account not found. Please register first.' };
+    const riderId = res.data?.data?.rider_id;
+    if (!riderId) return { ok: false, error: 'Unexpected server response' };
+    return { ok: true, riderId };
   };
 
-  // Login via token/phone
-  const login = async (phone: string, riderId?: string, token?: string) => {
-    const rid = riderId || `MS-${phone.slice(-4)}`;
-    const tok = token || `token_${Date.now()}`;
-    api.setAuthSession(tok, rid);
-    localStorage.setItem('rider_phone', phone);
-    setSession({
-      isLoggedIn: true,
-      phone,
-      riderId: rid,
-      token: tok,
-    });
-  };
-
-  // Register new partner
+  /** Creates the rider account and sends an OTP; the rider is logged in only after verifyOtp(). */
   const register = async (data: RegisterData): Promise<{ ok: boolean; riderId?: string; error?: string }> => {
-    const { name, phone, email, password, vehicleType, city } = data;
-    const cleanPhone = phone.replace(/\D/g, '');
-
-    try {
-      // Attempt backend registration
-      const res = await api.post('/v1/delivery/register', {
-        name,
-        phone: cleanPhone,
-        email,
-        password,
-        vehicle_type: vehicleType || 'bike',
-        city: city || 'Bhopal',
-      });
-
-      if (!res.ok) {
-        return { ok: false, error: res.error || 'Registration failed. Phone or email may already be registered.' };
-      }
-
-      const assignedId = res.data?.data?.rider_id || res.data?.rider_id || `MS-${cleanPhone.slice(-4)}`;
-      const token = res.data?.token || `jwt_${Date.now()}`;
-
-      // Setup clean profile for this rider
-      const newProf: RiderProfile = {
-        ...emptyProfile,
-        name,
-        email,
-        city: city || 'Bhopal',
-        vehicle: {
-          type: vehicleType || 'bike',
-          number: '',
-        },
-      };
-
-      setProfile(newProf);
-      localStorage.setItem(`rider_profile_${assignedId}`, JSON.stringify(newProf));
-
-      await login(cleanPhone, assignedId, token);
-
-      // Set state to waiting for review/approval
-      setVerification('inReview');
-      localStorage.setItem(`rider_verification_${assignedId}`, 'inReview');
-
-      return { ok: true, riderId: assignedId };
-    } catch (err: any) {
-      return { ok: false, error: err?.message || 'Registration failed' };
-    }
+    const cleanPhone = data.phone.replace(/\D/g, '');
+    const res = await api.post('/v1/delivery/register', { name: data.name, phone: cleanPhone, city: data.city || '' });
+    if (!res.ok) return { ok: false, error: res.error || 'Registration failed. Phone may already be registered.' };
+    const riderId = res.data?.data?.rider_id;
+    if (!riderId) return { ok: false, error: 'Unexpected server response' };
+    localStorage.setItem(`rider_pending_profile_${riderId}`, JSON.stringify({ email: data.email, vehicleType: data.vehicleType }));
+    return { ok: true, riderId };
   };
 
   const verifyOtp = async (phone: string, riderId: string, otp: string): Promise<{ ok: boolean; isExistingUser?: boolean; error?: string }> => {
-    if (otp.length !== 6) return { ok: false, error: 'OTP must be 6 digits' };
-
+    if (!/^\d{4,6}$/.test(otp)) return { ok: false, error: 'Please enter the OTP' };
+    if (!riderId) return { ok: false, error: 'Please request a new OTP' };
     const cleanPhone = phone.replace(/\D/g, '');
-    const checkRiderId = riderId || `MS-${cleanPhone.slice(-4)}`;
+    const res = await api.post('/v1/delivery/verify-otp', { rider_id: riderId, otp });
+    if (!res.ok) return { ok: false, error: res.error || 'Invalid OTP code. Verification failed.' };
+    const token = res.data?.token || res.data?.data?.token;
+    const riderObj = res.data?.rider || res.data?.data?.rider || {};
+    if (!token || !riderObj.id) return { ok: false, error: 'Verification failed' };
+    await login(cleanPhone, riderObj.id, token);
+    localStorage.setItem('rider_name', riderObj.name || '');
+    setVerification(mapApproval(riderObj.approval_status));
 
-    try {
-      const res = await api.post('/v1/delivery/verify-otp', {
-        rider_id: checkRiderId,
-        phone: cleanPhone,
-        otp,
-      });
-
-      if (!res.ok) {
-        return { ok: false, error: res.error || 'Invalid OTP code. Verification failed.' };
-      }
-
-      const token = res.data?.token || `jwt_${Date.now()}`;
-      const riderObj = res.data?.rider || {};
-      const actualRiderId = riderObj.id || checkRiderId;
-      const approvalStatus = riderObj.approval_status || 'inReview';
-
-      await login(cleanPhone, actualRiderId, token);
-      setVerification(approvalStatus as VerificationStatus);
-      localStorage.setItem(`rider_verification_${actualRiderId}`, approvalStatus);
-
-      return { ok: true, isExistingUser: true };
-    } catch (err: any) {
-      return { ok: false, error: err?.message || 'Invalid OTP code' };
+    // Apply details captured on the registration form (email / vehicle) once we have a session
+    const pending = localStorage.getItem(`rider_pending_profile_${riderObj.id}`);
+    if (pending) {
+      try {
+        const p = JSON.parse(pending);
+        if (p.email) await api.put('/v1/delivery/profile', { email: p.email });
+        if (p.vehicleType) await api.put('/v1/delivery/profile/vehicle', { type: p.vehicleType });
+      } catch {}
+      localStorage.removeItem(`rider_pending_profile_${riderObj.id}`);
     }
+    return { ok: true, isExistingUser: true };
   };
 
   const logout = () => {
+    if (isOnline) api.put('/v1/delivery/status', { online: false });
     api.clearSession();
     setSession({ isLoggedIn: false, phone: '' });
     setProfile(emptyProfile);
     setActiveOrders([]);
     setRequests([]);
+    setTrips([]);
+    setOrderHistory([]);
     setActiveDeliveryOrder(null);
+    setIsOnline(false);
     showToast('Logged out securely.', 'info');
   };
 
-  // Profile operations
+  // ── Profile ──
+
+  const ensureOk = (res: { ok: boolean; status: number; error?: string }, fallback: string) => {
+    if (!res.ok) {
+      handleUnauthorized(res.status);
+      throw new Error(res.error || fallback);
+    }
+  };
+
   const updateGeneralInfo = async (info: { name: string; email?: string; address?: string; city?: string }) => {
-    await api.put('/v1/delivery/profile', info);
-    setProfile((p) => ({
-      ...p,
-      name: info.name,
-      email: info.email !== undefined ? info.email : p.email,
-      address: info.address !== undefined ? info.address : p.address,
-      city: info.city !== undefined ? info.city : p.city,
-    }));
+    ensureOk(await api.put('/v1/delivery/profile', info), 'Could not update profile');
+    await refreshProfile();
   };
 
   const updateVehicle = async (details: { type: VehicleType; number?: string; drivingLicenseNumber?: string }) => {
-    await api.put('/v1/delivery/profile/vehicle', details);
-    setProfile((p) => ({
-      ...p,
-      vehicle: {
+    ensureOk(
+      await api.put('/v1/delivery/profile/vehicle', {
         type: details.type,
-        number: details.number ?? p.vehicle.number,
-      },
-      drivingLicenseNumber: details.drivingLicenseNumber ?? p.drivingLicenseNumber,
-    }));
+        number: details.number,
+        driving_license_number: details.drivingLicenseNumber,
+      }),
+      'Could not update vehicle'
+    );
+    await refreshProfile();
   };
 
   const updateBank = async (details: { holder: string; account: string; ifsc: string }) => {
-    await api.put('/v1/delivery/profile/bank', {
-      account_name: details.holder,
-      account_number: details.account,
-      ifsc: details.ifsc,
-    });
-    setProfile((p) => ({
-      ...p,
-      bank: {
-        holderName: details.holder,
-        accountNumber: details.account,
-        ifsc: details.ifsc,
-      },
-    }));
+    ensureOk(
+      await api.put('/v1/delivery/profile/bank', { account_name: details.holder, account_number: details.account, ifsc: details.ifsc }),
+      'Could not update bank details'
+    );
+    await refreshProfile();
   };
 
-  const setDocumentStatus = async (type: DocumentType, status: DocumentStatus) => {
-    const docKey = type === 'idProof' ? 'id_proof' : type === 'drivingLicense' ? 'driving_license' : 'rc_book';
-    await api.post('/v1/delivery/profile/documents', { doc: docKey, status });
-    setProfile((p) => ({
-      ...p,
-      documents: {
-        ...p.documents,
-        [type]: status,
-      },
-    }));
+  /** Riders can only submit a document for review; approval is done by admin. */
+  const setDocumentStatus = async (type: DocumentType, _status: DocumentStatus) => {
+    ensureOk(await api.post('/v1/delivery/profile/documents', { doc: DOC_KEY[type] }), 'Could not submit document');
+    await refreshProfile();
   };
 
   const uploadDocument = async (type: DocumentType, fileData: string | File) => {
-    setProfile((p) => ({
-      ...p,
-      documents: {
-        ...p.documents,
-        [type]: 'pending',
-      },
-    }));
+    if (typeof fileData === 'string') {
+      // Already-hosted URL
+      ensureOk(await api.post('/v1/delivery/profile/documents', { doc: DOC_KEY[type], url: fileData }), 'Upload failed');
+    } else {
+      ensureOk(await api.upload('/v1/delivery/profile/documents/upload', fileData, { doc: DOC_KEY[type] }), 'Upload failed');
+    }
+    await refreshProfile();
   };
 
-  const setBackgroundVerification = (status: VerificationStatus) => {
-    setVerification(status);
+  // Verification can only change on the server; this just re-reads it.
+  const setBackgroundVerification = (_status: VerificationStatus) => {
+    refreshProfile();
   };
 
   const toggleAttendanceForToday = () => {
     const today = new Date().toISOString().split('T')[0];
-    let next: string[];
-    let isNowCheckedIn = false;
-    if (checkedInDays.includes(today)) {
-      next = checkedInDays.filter((d) => d !== today);
-      isNowCheckedIn = false;
-    } else {
-      next = [...checkedInDays, today];
-      isNowCheckedIn = true;
-    }
-    setCheckedInDays(next);
+    const isNowCheckedIn = !checkedInDays.includes(today);
+    setCheckedInDays(isNowCheckedIn ? [...checkedInDays, today] : checkedInDays.filter((d) => d !== today));
     return isNowCheckedIn;
   };
 
   const setOnline = async (value: boolean) => {
-    setIsOnline(value);
-    await api.put('/v1/delivery/status', { online: value });
-    if (!value) {
-      setRequests([]);
-    } else {
-      fetchAvailableOrders();
+    const res = await api.put('/v1/delivery/status', { online: value });
+    if (!res.ok) {
+      handleUnauthorized(res.status);
+      showToast(res.error || 'Could not change status', 'error');
+      return;
     }
+    setIsOnline(Boolean(res.data?.is_online));
+    if (!value) setRequests([]);
   };
 
   const updateSettings = (newSettings: Partial<SettingsState>) => {
     setSettings((s) => ({ ...s, ...newSettings }));
-    api.put('/v1/delivery/settings', newSettings);
+    api.put('/v1/delivery/settings', {
+      ...(newSettings.orderAlertsEnabled !== undefined ? { orderAlerts: newSettings.orderAlertsEnabled } : {}),
+      ...(newSettings.soundEnabled !== undefined ? { sound: newSettings.soundEnabled } : {}),
+      ...(newSettings.vibrationEnabled !== undefined ? { vibration: newSettings.vibrationEnabled } : {}),
+      ...(newSettings.language ? { language: newSettings.language === 'Hindi' ? 'hi' : 'en' } : {}),
+    });
   };
 
-  const fetchAvailableOrders = async () => {
-    if (!isOnline) return;
-    const res = await api.get('/v1/delivery/orders/available');
-    if (res.ok && Array.isArray(res.data) && res.data.length > 0) {
-      const mapped: OrderRequest[] = res.data.map((o: any) => ({
-        id: o.id || Math.floor(1000 + Math.random() * 9000),
-        restaurantName: o.restaurant_name || 'Sharda Partner Store',
-        restaurantArea: o.restaurant_address || 'City Center, Bhopal',
-        dropArea: typeof o.delivery_address === 'string' ? o.delivery_address : 'Customer Area',
-        pickupDistanceKm: 1.2,
-        deliveryDistanceKm: 3.2,
-        totalDistanceKm: 4.4,
-        etaMin: 20,
-        expectedEarning: o.earning || 65,
-        cashToCollect: o.cash_to_collect || 0,
-        createdAt: o.created_at || new Date().toISOString(),
-        expiresAt: new Date(Date.now() + 60000).toISOString(),
-        pickupOtp: o.pickup_otp || '1234',
-        deliveryOtp: o.delivery_otp || '5678',
-        orderAmount: o.amount || 250,
-        items: [{ name: 'Express Food Delivery', quantity: 1 }],
-      }));
-      setRequests(mapped);
-    } else {
-      setRequests([]);
-    }
+  // ── Order flow ──
+
+  const replaceActive = (o: any) => {
+    const mapped = mapActive(o);
+    setActiveOrders((prev) => {
+      const others = prev.filter((a) => a.id !== mapped.id);
+      return ACTIVE_STATUSES.includes(o.status) ? [...others, mapped] : others;
+    });
+    setActiveDeliveryOrder((cur) => (cur && cur.id === mapped.id ? (ACTIVE_STATUSES.includes(o.status) ? mapped : null) : cur));
+    return mapped;
   };
 
-  const acceptOrder = async (requestId: number): Promise<boolean> => {
-    const req = requests.find((r) => r.id === requestId);
-    if (!req) return false;
-
-    await api.post(`/v1/delivery/orders/${requestId}/accept`);
-
-    const newActive: ActiveOrder = {
-      id: req.id,
-      request: req,
-      progress: 'navigateRestaurant',
-      pickupOtp: req.pickupOtp,
-      deliveryOtp: req.deliveryOtp,
-      fareBreakdown: calculateFare(req),
-      cashToCollect: req.cashToCollect,
-    };
-
-    setActiveOrders((prev) => [...prev, newActive]);
+  const acceptOrder = async (requestId: string): Promise<boolean> => {
+    const res = await api.post(`/v1/delivery/orders/${requestId}/accept`);
     setRequests((prev) => prev.filter((r) => r.id !== requestId));
-    setActiveDeliveryOrder(newActive);
-    showToast(`Order #${req.id} accepted! Head to ${req.restaurantName}`, 'success');
+    if (!res.ok) {
+      handleUnauthorized(res.status);
+      showToast(res.error || 'Order is no longer available', 'error');
+      fetchAvailableOrders();
+      return false;
+    }
+    const mapped = replaceActive(res.data);
+    setActiveDeliveryOrder(mapped);
+    showToast(`Order accepted! Head to ${mapped.request.restaurantName}`, 'success');
     return true;
   };
 
-  const rejectOrder = async (requestId: number, reason?: string) => {
-    await api.post(`/v1/delivery/orders/${requestId}/reject`);
+  const rejectOrder = async (requestId: string) => {
+    const res = await api.post(`/v1/delivery/orders/${requestId}/reject`);
+    if (!res.ok) {
+      showToast(res.error || 'Could not decline order', 'error');
+      return;
+    }
+    setDeclined((d) => d + 1);
     setRequests((prev) => prev.filter((r) => r.id !== requestId));
-
-    setOrderHistory((prev) => [
-      {
-        orderId: requestId,
-        restaurantName: 'Rejected Request',
-        dropArea: 'Customer Locality',
-        status: 'rejected',
-        completedAt: new Date().toISOString(),
-        earning: 0,
-        cashCollected: 0,
-        note: reason || 'Driver unavailable',
-      },
-      ...prev,
-    ]);
+    setActiveOrders((prev) => prev.filter((o) => o.id !== requestId));
+    setActiveDeliveryOrder((cur) => (cur?.id === requestId ? null : cur));
   };
 
-  const markReachedRestaurant = async (orderId: number) => {
-    await api.put(`/v1/delivery/orders/${orderId}/status`, { status: 'DRIVER_ARRIVED_AT_MERCHANT' });
-    setActiveOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, progress: 'reachedRestaurant' } : o))
-    );
-    if (activeDeliveryOrder && activeDeliveryOrder.id === orderId) {
-      setActiveDeliveryOrder((cur) => (cur ? { ...cur, progress: 'reachedRestaurant' } : null));
+  const moveTo = async (orderId: string, status: string, otp?: string) => {
+    const res = await api.put(`/v1/delivery/orders/${orderId}/status`, { status, ...(otp ? { otp: otp.trim() } : {}) });
+    if (!res.ok) {
+      handleUnauthorized(res.status);
+      return { ok: false, error: res.error || 'Update failed' };
     }
+    replaceActive(res.data);
+    return { ok: true };
   };
 
-  const confirmPickupOtp = async (orderId: number, otp: string): Promise<boolean> => {
-    const order = activeOrders.find((o) => o.id === orderId);
-    if (!order) return false;
-    if (otp.trim() !== order.pickupOtp && otp.trim() !== '1234') {
+  const markReachedRestaurant = async (orderId: string) => {
+    const r = await moveTo(orderId, 'DRIVER_ARRIVED_AT_MERCHANT');
+    if (!r.ok) showToast(r.error!, 'error');
+  };
+
+  const confirmPickupOtp = async (orderId: string, otp: string): Promise<boolean> => {
+    const r = await moveTo(orderId, 'PICKED_UP', otp);
+    if (!r.ok) showToast(r.error!, 'error');
+    return r.ok;
+  };
+
+  const markArrivedCustomer = async (orderId: string) => {
+    const r = await moveTo(orderId, 'ARRIVED_AT_CUSTOMER');
+    if (!r.ok) showToast(r.error!, 'error');
+  };
+
+  const confirmDeliveryOtp = async (orderId: string, otp: string): Promise<boolean> => {
+    const r = await moveTo(orderId, 'DELIVERED', otp);
+    if (!r.ok) {
+      showToast(r.error!, 'error');
       return false;
     }
-    await api.put(`/v1/delivery/orders/${orderId}/status`, { status: 'PICKED_UP' });
-    setActiveOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, progress: 'pickedUp' } : o))
-    );
-    if (activeDeliveryOrder && activeDeliveryOrder.id === orderId) {
-      setActiveDeliveryOrder((cur) => (cur ? { ...cur, progress: 'pickedUp' } : null));
-    }
-    return true;
-  };
-
-  const markArrivedCustomer = async (orderId: number) => {
-    await api.put(`/v1/delivery/orders/${orderId}/status`, { status: 'ARRIVED_AT_CUSTOMER' });
-    setActiveOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, progress: 'arrivedCustomer' } : o))
-    );
-    if (activeDeliveryOrder && activeDeliveryOrder.id === orderId) {
-      setActiveDeliveryOrder((cur) => (cur ? { ...cur, progress: 'arrivedCustomer' } : null));
-    }
-  };
-
-  const confirmDeliveryOtp = async (orderId: number, otp: string): Promise<boolean> => {
-    const order = activeOrders.find((o) => o.id === orderId);
-    if (!order) return false;
-    if (otp.trim() !== order.deliveryOtp && otp.trim() !== '5678') {
-      return false;
-    }
-    await api.put(`/v1/delivery/orders/${orderId}/status`, { status: 'DELIVERED' });
     await completeOrder(orderId);
     return true;
   };
 
-  const completeOrder = async (orderId: number) => {
-    const order = activeOrders.find((o) => o.id === orderId);
-    if (!order) return;
-
-    const earning = order.fareBreakdown.total;
-    const isCod = order.cashToCollect > 0;
-
-    const newTrip: TripEarning = {
-      orderId: order.id,
-      createdAt: new Date().toISOString(),
-      baseFare: order.fareBreakdown.baseFare,
-      distanceFare: order.fareBreakdown.distanceFare,
-      surge: order.fareBreakdown.surge,
-      tips: order.fareBreakdown.tips,
-      incentive: order.fareBreakdown.incentive,
-      isCod,
-      cashCollected: order.cashToCollect,
-      total: earning,
-    };
-
-    setTrips((prev) => [newTrip, ...prev]);
-
-    setOrderHistory((prev) => [
-      {
-        orderId: order.id,
-        restaurantName: order.request.restaurantName,
-        dropArea: order.request.dropArea,
-        status: 'delivered',
-        completedAt: new Date().toISOString(),
-        earning,
-        cashCollected: order.cashToCollect,
-        note: isCod ? `COD Cash Collected: ₹${order.cashToCollect}` : 'Prepaid Online Order',
-      },
-      ...prev,
-    ]);
-
-    setActiveOrders((prev) => prev.filter((o) => o.id !== orderId));
-    if (activeDeliveryOrder && activeDeliveryOrder.id === orderId) {
-      setActiveDeliveryOrder(null);
-    }
-
-    setMetrics((prev) => ({
-      ...prev,
-      completedTrips: prev.completedTrips + 1,
-    }));
-
-    showToast(`Order delivered! ₹${earning} added to your earnings.`, 'success');
+  const completeOrder = async (_orderId?: string) => {
+    await Promise.all([refreshMyOrders(), refreshEarnings(), refreshProfile()]);
+    showToast('Order delivered! Earnings updated.', 'success');
   };
 
   const refreshOrders = async () => {
-    await fetchAvailableOrders();
+    await Promise.all([fetchAvailableOrders(), refreshMyOrders()]);
   };
 
-  const refreshEarnings = async () => {
-    const res = await api.get('/v1/delivery/earnings');
-    if (res.ok && res.data?.trips) {
-      setTrips(res.data.trips);
-    }
-  };
-
-  // Aggregated totals
-  const todayTotal = useMemo(() => {
-    const todayStr = new Date().toDateString();
-    return trips
-      .filter((t) => new Date(t.createdAt).toDateString() === todayStr)
-      .reduce((sum, t) => sum + t.total, 0);
-  }, [trips]);
-
+  // ── Totals (from server trips) ──
+  const sumWhere = (pred: (t: TripEarning) => boolean) => trips.filter(pred).reduce((s, t) => s + t.total, 0);
+  const todayTotal = useMemo(() => sumWhere((t) => new Date(t.createdAt).toDateString() === new Date().toDateString()), [trips]);
   const weekTotal = useMemo(() => {
-    const oneWeekAgo = Date.now() - 7 * 86400000;
-    return trips
-      .filter((t) => new Date(t.createdAt).getTime() >= oneWeekAgo)
-      .reduce((sum, t) => sum + t.total, 0);
+    const start = new Date();
+    const day = start.getDay() || 7;
+    start.setDate(start.getDate() - (day - 1));
+    start.setHours(0, 0, 0, 0);
+    return sumWhere((t) => new Date(t.createdAt) >= start);
   }, [trips]);
-
   const monthTotal = useMemo(() => {
-    const curMonth = new Date().getMonth();
-    return trips
-      .filter((t) => new Date(t.createdAt).getMonth() === curMonth)
-      .reduce((sum, t) => sum + t.total, 0);
+    const n = new Date();
+    return sumWhere((t) => {
+      const d = new Date(t.createdAt);
+      return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
+    });
   }, [trips]);
+  const codCashPending = useMemo(() => trips.filter((t) => t.isCod).reduce((s, t) => s + t.cashCollected, 0), [trips]);
 
-  const codCashPending = useMemo(() => {
-    return trips.filter((t) => t.isCod).reduce((sum, t) => sum + t.cashCollected, 0);
-  }, [trips]);
+  const metrics: RiderMetrics = useMemo(() => {
+    const delivered = orderHistory.filter((h) => h.status === 'delivered').length;
+    const accepted = delivered + activeOrders.length;
+    return {
+      rating: serverRating,
+      acceptanceRate: accepted + declined > 0 ? accepted / (accepted + declined) : 0,
+      completionRate: orderHistory.length > 0 ? delivered / orderHistory.length : 0,
+      completedTrips: serverDeliveries,
+    };
+  }, [orderHistory, activeOrders.length, declined, serverRating, serverDeliveries]);
 
   const value: AppContextType = {
     session,
@@ -823,6 +700,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setDocumentStatus,
     uploadDocument,
     setBackgroundVerification,
+    refreshProfile,
     checkedInDays,
     toggleAttendanceForToday,
     requests,
@@ -855,8 +733,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
 export const useApp = (): AppContextType => {
   const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useApp must be used within an AppProvider');
-  }
+  if (!context) throw new Error('useApp must be used within an AppProvider');
   return context;
 };

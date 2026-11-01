@@ -11,7 +11,7 @@ export const AuthScreen: React.FC = () => {
   const { loginWithPassword, requestOtp, register, verifyOtp } = useApp();
   const { showToast } = useToast();
 
-  const [mode, setMode] = useState<AuthMode>('password');
+  const [mode, setMode] = useState<AuthMode>('otp');
 
   // Password Login state
   const [identifier, setIdentifier] = useState('');
@@ -85,8 +85,8 @@ export const AuthScreen: React.FC = () => {
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (otp.length !== 6) {
-      setErrorMsg('Please enter the 6-digit verification code');
+    if (!/^\d{4,6}$/.test(otp)) {
+      setErrorMsg('Please enter the verification code');
       return;
     }
     setErrorMsg('');
@@ -118,27 +118,24 @@ export const AuthScreen: React.FC = () => {
             );
             const data = await resp.json();
             const sub = data?.address?.suburb || data?.address?.neighbourhood || data?.address?.road || '';
-            const city = data?.address?.city || data?.address?.town || data?.address?.county || 'Bhopal';
+            const city = data?.address?.city || data?.address?.town || data?.address?.county || '';
             const locStr = sub ? `${sub}, ${city}` : city;
             setRegCity(locStr);
             showToast(`Location set: ${locStr}`, 'success');
           } catch (_) {
-            setRegCity('Current Area, Bhopal');
-            showToast('Location set: Current Area, Bhopal', 'success');
+            showToast('Could not detect your city. Please type it.', 'info');
           } finally {
             setIsLocating(false);
           }
         },
         () => {
           setIsLocating(false);
-          setRegCity('Current Area, Bhopal');
-          showToast('Location set: Current Area, Bhopal', 'info');
+          showToast('Could not detect your city. Please type it.', 'info');
         },
         { timeout: 8000 }
       );
     } else {
-      setRegCity('Current Area, Bhopal');
-      showToast('Location set: Current Area, Bhopal', 'info');
+      showToast('Could not detect your city. Please type it.', 'info');
     }
   };
 
@@ -171,12 +168,18 @@ export const AuthScreen: React.FC = () => {
       email: regEmail.trim(),
       password: regPassword,
       vehicleType: regVehicle,
-      city: regCity || 'Current Location, Bhopal',
+      city: regCity,
     });
     setLoading(false);
 
-    if (res.ok) {
-      showToast('Registration submitted! Proceeding to onboarding.', 'success');
+    if (res.ok && res.riderId) {
+      // Account created on the server; verify the phone with the OTP that was just sent.
+      setPhone(cleanPhone);
+      setRiderIdForOtp(res.riderId);
+      setOtp('');
+      setOtpSent(true);
+      setMode('otp');
+      showToast('Registration submitted! Enter the OTP sent to your phone.', 'success');
     } else {
       setErrorMsg(res.error || 'Registration failed');
     }
@@ -286,7 +289,7 @@ export const AuthScreen: React.FC = () => {
                         type="text"
                         value={identifier}
                         onChange={(e) => setIdentifier(e.target.value)}
-                        placeholder="e.g. 9876543210 or MS-4921"
+                        placeholder="e.g. 9876543210"
                         className="w-full bg-transparent text-xs text-slate-900 font-semibold outline-none placeholder:text-slate-400"
                         autoFocus
                       />
@@ -428,8 +431,12 @@ export const AuthScreen: React.FC = () => {
                         <span>Didn't receive SMS?</span>
                         <button
                           type="button"
-                          onClick={() => {
-                            showToast('New code sent via SMS: 123456', 'info');
+                          onClick={async () => {
+                            const r = await requestOtp(phone.replace(/\D/g, ''));
+                            if (r.ok && r.riderId) {
+                              setRiderIdForOtp(r.riderId);
+                              showToast('A new OTP has been sent', 'info');
+                            } else showToast(r.error || 'Could not resend OTP', 'error');
                           }}
                           className="font-bold text-emerald-600 hover:underline"
                         >
@@ -444,7 +451,7 @@ export const AuthScreen: React.FC = () => {
                       label="Verify & Sign In"
                       type="submit"
                       isLoading={loading}
-                      disabled={otp.length !== 6}
+                      disabled={otp.length < 4}
                     />
                   </div>
                 </form>
@@ -459,7 +466,7 @@ export const AuthScreen: React.FC = () => {
                 <div>
                   <h2 className="text-lg font-extrabold text-slate-900 tracking-tight">Join As Delivery Partner</h2>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Register with your details to receive orders in Bhopal.
+                    Register with your details to start receiving orders.
                   </p>
                 </div>
 
