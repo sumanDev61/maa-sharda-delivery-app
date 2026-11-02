@@ -443,12 +443,13 @@ const OrderCard: React.FC<OrderCardProps> = ({ order, onAccept, onReject }) => {
               {order.restaurantName}
             </h4>
             <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-slate-400 font-medium">
-              <span className="flex items-center gap-0.5 text-amber-400 font-bold">
-                <Star className="w-2.5 h-2.5 fill-current" />
-                4.8
+              <span className={`font-bold ${order.foodReady ? 'text-[#00E676]' : 'text-amber-400'}`}>
+                {order.foodReady ? 'Food ready' : 'Preparing'}
               </span>
               <span>•</span>
-              <span>{order.items.length} items</span>
+              <span>
+                {order.itemsCount ?? order.items.length} {(order.itemsCount ?? order.items.length) === 1 ? 'item' : 'items'}
+              </span>
               <span>•</span>
               <span>~{order.etaMin} mins</span>
             </div>

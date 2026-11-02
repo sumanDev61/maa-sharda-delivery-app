@@ -38,6 +38,9 @@ export interface OrderRequest {
   deliveryOtp: string;
   orderAmount: number;
   items: OrderItem[];
+  itemsCount?: number;
+  noContactDelivery?: boolean;
+  foodReady?: boolean;
   restaurantLat?: number | null;
   restaurantLng?: number | null;
   dropLat?: number | null;

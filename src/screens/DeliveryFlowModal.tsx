@@ -40,7 +40,6 @@ export const DeliveryFlowModal: React.FC = () => {
   const [showChatModal, setShowChatModal] = useState(false);
   const [chatMessages, setChatMessages] = useState<Array<{ sender: 'rider' | 'customer' | 'system'; text: string; time: string }>>([
     { sender: 'system', text: 'Live communication channel opened for Order', time: 'Now' },
-    { sender: 'customer', text: 'Please ring the doorbell when you arrive at Flat 402.', time: 'Just now' },
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [orderCompletedSuccess, setOrderCompletedSuccess] = useState(false);
@@ -60,8 +59,22 @@ export const DeliveryFlowModal: React.FC = () => {
     showToast('Message sent to customer', 'info');
   };
 
+  const toStore = order.progress === 'navigateRestaurant' || order.progress === 'reachedRestaurant';
+  const customerPhone = String(order.request.customerPhone || '').replace(/[^\d+]/g, '');
+
+  // Opens real turn-by-turn navigation (Google Maps app / browser) to the current destination.
   const handleSimulateNavigation = () => {
-    showToast(`Navigating to ${order.progress === 'navigateRestaurant' || order.progress === 'reachedRestaurant' ? order.request.restaurantName : order.request.dropArea} via turn-by-turn route`, 'info');
+    const lat = toStore ? order.request.restaurantLat : order.request.dropLat;
+    const lng = toStore ? order.request.restaurantLng : order.request.dropLng;
+    const destination =
+      lat != null && lng != null
+        ? `${lat},${lng}`
+        : encodeURIComponent(toStore ? `${order.request.restaurantName} ${order.request.restaurantArea}` : order.request.dropArea);
+    if (!destination) {
+      showToast('Location not available for this order', 'error');
+      return;
+    }
+    window.open(`https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=two-wheeler`, '_blank');
   };
 
   const handleReachedRestaurant = async () => {
@@ -151,7 +164,7 @@ export const DeliveryFlowModal: React.FC = () => {
             className="px-4 py-2.5 rounded-full bg-[#00E676] text-slate-950 font-black text-xs shadow-lg shadow-emerald-500/20 hover:bg-[#00c864] transition active:scale-95 flex items-center gap-1.5"
           >
             <Navigation className="w-4 h-4 fill-current" />
-            <span>Turn-by-Turn GPS</span>
+            <span>Open in Maps</span>
           </button>
         </div>
       </div>
@@ -178,20 +191,24 @@ export const DeliveryFlowModal: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-2">
-              <a
-                href="tel:9876543210"
-                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition"
-                title="Call Customer"
-              >
-                <Phone className="w-4 h-4" />
-              </a>
-              <button
-                onClick={() => setShowChatModal(true)}
-                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition"
-                title="Chat Customer"
-              >
-                <MessageSquare className="w-4 h-4" />
-              </button>
+              {customerPhone ? (
+                <>
+                  <a
+                    href={`tel:${customerPhone}`}
+                    className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition"
+                    title="Call Customer"
+                  >
+                    <Phone className="w-4 h-4" />
+                  </a>
+                  <a
+                    href={`sms:${customerPhone}`}
+                    className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition"
+                    title="Message Customer"
+                  >
+                    <MessageSquare className="w-4 h-4" />
+                  </a>
+                </>
+              ) : null}
             </div>
           </div>
 
@@ -223,6 +240,9 @@ export const DeliveryFlowModal: React.FC = () => {
                 <span className="font-bold text-white block">Pickup Directions:</span>
                 <p>Reach {order.request.restaurantName} at {order.request.restaurantArea || 'City Center'}.</p>
                 <p className="text-slate-400">Items: {order.request.items.map((i) => `${i.quantity}x ${i.name}`).join(', ') || 'Food items'}</p>
+                {order.request.instructions ? (
+                  <p className="text-amber-300">Note: {order.request.instructions}</p>
+                ) : null}
               </div>
 
               <button
@@ -281,6 +301,12 @@ export const DeliveryFlowModal: React.FC = () => {
                   <MapPin className="w-4 h-4 text-[#00E676]" />
                   <span>{order.request.dropArea}</span>
                 </p>
+                {order.request.noContactDelivery ? (
+                  <p className="text-sky-300 font-semibold">No-contact delivery: leave the packet at the door, then ask for the OTP.</p>
+                ) : null}
+                {order.request.instructions ? (
+                  <p className="text-amber-300">Note: {order.request.instructions}</p>
+                ) : null}
                 {order.cashToCollect > 0 ? (
                   <div className="p-2.5 rounded-xl bg-amber-950/50 border border-amber-500/40 text-amber-300 font-bold text-xs mt-2">
                     💵 Collect Cash on Delivery: ₹{order.cashToCollect}

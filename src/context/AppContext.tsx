@@ -156,6 +156,13 @@ const mapRequest = (o: any): OrderRequest => ({
   deliveryOtp: '',
   orderAmount: Number(o.amount ?? 0),
   items: Array.isArray(o.items) ? o.items.map((it: any) => ({ name: it.name, quantity: it.quantity })) : [],
+  // The dispatch pool hides line items (privacy) and only sends a count.
+  itemsCount: Number(
+    o.items_count ??
+      (Array.isArray(o.items) ? o.items.reduce((s: number, it: any) => s + Number(it.quantity || 0), 0) : 0)
+  ),
+  foodReady: Boolean(o.ready),
+  noContactDelivery: Boolean(o.no_contact_delivery),
   restaurantLat: o.restaurant_lat ?? null,
   restaurantLng: o.restaurant_lng ?? null,
   customerName: o.customer_name || '',

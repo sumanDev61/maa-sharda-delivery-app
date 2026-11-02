@@ -155,10 +155,6 @@ export const AuthScreen: React.FC = () => {
       setErrorMsg('Please enter a valid email address');
       return;
     }
-    if (!regPassword || regPassword.length < 4) {
-      setErrorMsg('Password must be at least 4 characters');
-      return;
-    }
 
     setErrorMsg('');
     setLoading(true);
@@ -209,21 +205,8 @@ export const AuthScreen: React.FC = () => {
           </div>
 
           {/* Mode Switcher */}
-          <div className="mt-5 grid grid-cols-3 gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800 text-xs">
-            <button
-              type="button"
-              onClick={() => {
-                setMode('password');
-                setErrorMsg('');
-              }}
-              className={`py-1.5 rounded-lg font-bold transition text-[11px] ${
-                mode === 'password'
-                  ? 'bg-[#00E676] text-slate-950 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Password
-            </button>
+          {/* Riders sign in with OTP only (the server has no rider password login). */}
+          <div className="mt-5 grid grid-cols-2 gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800 text-xs">
             <button
               type="button"
               onClick={() => {
@@ -544,23 +527,6 @@ export const AuthScreen: React.FC = () => {
                         value={regEmail}
                         onChange={(e) => setRegEmail(e.target.value)}
                         placeholder="partner@example.com"
-                        className="w-full bg-transparent text-xs text-slate-900 font-semibold outline-none placeholder:text-slate-400"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-                      Create Password
-                    </label>
-                    <div className="flex items-center rounded-xl bg-slate-50 border border-slate-200 focus-within:border-[#00E676] focus-within:bg-white px-3 py-2 transition">
-                      <Lock className="w-4 h-4 text-slate-400 mr-2 shrink-0" />
-                      <input
-                        type="password"
-                        value={regPassword}
-                        onChange={(e) => setRegPassword(e.target.value)}
-                        placeholder="Min 4 characters"
                         className="w-full bg-transparent text-xs text-slate-900 font-semibold outline-none placeholder:text-slate-400"
                         required
                       />
